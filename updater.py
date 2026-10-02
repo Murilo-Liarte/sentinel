@@ -33,7 +33,7 @@ import database
 
 logger = logging.getLogger("Sentinel.Updater")
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/Murilo-Liarte/sentinel/main/version.json"
 
 
