@@ -26,3 +26,8 @@ sentinel_log_*.csv
 .idea/
 Thumbs.db
 desktop.ini
+
+# Developer internal notes
+RELEASE_GUIDE.md
+*_GUIDE.md
+

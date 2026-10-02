@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "release_date": "2026-10-02",
   "download_url": "https://github.com/Murilo-Liarte/sentinel/releases/latest/download/Sentinel-Setup.exe",
-  "release_notes": "Sentinel v1.0.1:\n- Otimizacao de desempenho de camera com DirectShow (30 FPS estaveis em maquinas virtuais)\n- Escalonamento adaptativo do detector facial para 320px (15ms por ciclo de IA)\n- Cache inteligente de inferencia de emocoes (reducao de 90% no uso de CPU)\n- Correcao definitiva do canal de atualizacao global",
+  "release_notes": "Sentinel v1.0.2:\n- Novo painel de Configuracoes (Arquivo -> Configuracoes) com abas Geral e Camera\n- Controle dinamico de FPS da camera (15, 20, 30 e 60 FPS) para reduzir uso de CPU\n- Exibicao da versao instalada e atalho direto para verificar atualizacoes\n- Troca instantanea de idioma integrada as configuracoes",
   "mandatory": false
 }

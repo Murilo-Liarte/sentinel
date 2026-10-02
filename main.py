@@ -46,6 +46,7 @@ import i18n
 import updater
 from app_paths import get_resource
 from camera_worker import CameraWorker
+from settings_dialog import SettingsDialog
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -165,6 +166,10 @@ class SentinelWindow(QMainWindow):
         self.action_export_csv = QAction(i18n.t("menu_export_csv"), self)
         self.action_export_csv.triggered.connect(self._export_csv)
         self.menu_file.addAction(self.action_export_csv)
+
+        self.action_settings = QAction(i18n.t("menu_settings"), self)
+        self.action_settings.triggered.connect(self._show_settings)
+        self.menu_file.addAction(self.action_settings)
 
         self.menu_file.addSeparator()
 
@@ -502,6 +507,8 @@ class SentinelWindow(QMainWindow):
         if hasattr(self, "menu_file"):
             self.menu_file.setTitle(i18n.t("menu_file"))
             self.action_export_csv.setText(i18n.t("menu_export_csv"))
+            if hasattr(self, "action_settings"):
+                self.action_settings.setText(i18n.t("menu_settings"))
             self.action_exit.setText(i18n.t("menu_exit"))
         if hasattr(self, "menu_help"):
             self.menu_help.setTitle(i18n.t("menu_help"))
@@ -964,6 +971,34 @@ class SentinelWindow(QMainWindow):
             i18n.t("about_title"),
             i18n.t("about_body", version=updater.APP_VERSION),
         )
+
+    def _show_settings(self) -> None:
+        """Open the Settings dialog modal."""
+        dlg = SettingsDialog(self, on_check_updates_cb=self._check_updates_manual)
+        dlg.settings_changed.connect(self._on_settings_changed)
+        dlg.exec()
+
+    def _on_settings_changed(self) -> None:
+        """Callback when language or camera FPS is modified in settings."""
+        # 1. Sync toolbar language selector
+        cur_lang = i18n.get_language()
+        for idx in range(self.lang_selector.count()):
+            if self.lang_selector.itemData(idx) == cur_lang:
+                self.lang_selector.blockSignals(True)
+                self.lang_selector.setCurrentIndex(idx)
+                self.lang_selector.blockSignals(False)
+                break
+
+        # 2. Retranslate all UI labels
+        self._retranslate_ui()
+
+        # 3. Apply FPS if camera is currently running
+        if self._worker:
+            try:
+                fps = int(database.get_setting("target_fps", "30"))
+                self._worker.set_target_fps(fps)
+            except Exception as exc:
+                logger.debug("Failed to set target FPS: %s", exc)
 
     # =========================================================================
     # Window close

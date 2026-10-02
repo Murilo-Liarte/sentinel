@@ -152,6 +152,21 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "update_error_title": "Erro na Atualização",
         "update_error_msg": "Não foi possível verificar atualizações:\n{error}",
         "update_cancel": "Cancelar",
+
+        # Settings Dialog
+        "menu_settings": "Configurações...",
+        "settings_dialog_title": "Configurações do Sentinel",
+        "settings_tab_general": "Geral",
+        "settings_tab_camera": "Câmera e Desempenho",
+        "settings_lang_label": "Idioma da Interface:",
+        "settings_lang_desc": "Altere o idioma do aplicativo instantaneamente.",
+        "settings_fps_label": "Taxa de Quadros da Câmera (FPS):",
+        "settings_fps_desc": "Limite de FPS da captura. 30 FPS é recomendado. Reduza para 15 ou 20 FPS em máquinas com menor poder de processamento.",
+        "settings_version_label": "Versão Instalada:",
+        "settings_version_info": "Sentinel v{version} (Compilação Nativa x64)",
+        "settings_engine_info": "Motor: dlib C++ & PySide6 & Busca Vetorial BLAS",
+        "settings_btn_check_update": "Verificar Atualizações",
+        "settings_btn_save": "Salvar e Fechar",
     },
 
     "en_US": {
@@ -285,6 +300,21 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "update_error_title": "Update Error",
         "update_error_msg": "Could not check for updates:\n{error}",
         "update_cancel": "Cancel",
+
+        # Settings Dialog
+        "menu_settings": "Settings...",
+        "settings_dialog_title": "Sentinel Settings",
+        "settings_tab_general": "General",
+        "settings_tab_camera": "Camera & Performance",
+        "settings_lang_label": "Interface Language:",
+        "settings_lang_desc": "Change application language on the fly.",
+        "settings_fps_label": "Camera Frame Rate (FPS):",
+        "settings_fps_desc": "Camera capture FPS limit. 30 FPS is recommended. Lower to 15 or 20 FPS to reduce CPU usage.",
+        "settings_version_label": "Installed Version:",
+        "settings_version_info": "Sentinel v{version} (Native x64 Build)",
+        "settings_engine_info": "Engine: dlib C++ & PySide6 & BLAS Vectorized Search",
+        "settings_btn_check_update": "Check for Updates Now",
+        "settings_btn_save": "Save and Close",
     },
 
     "es_ES": {
@@ -418,6 +448,21 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "update_error_title": "Error de Actualización",
         "update_error_msg": "No se pudieron comprobar las actualizaciones:\n{error}",
         "update_cancel": "Cancelar",
+
+        # Settings Dialog
+        "menu_settings": "Configuración...",
+        "settings_dialog_title": "Configuración de Sentinel",
+        "settings_tab_general": "General",
+        "settings_tab_camera": "Cámara y Rendimiento",
+        "settings_lang_label": "Idioma de la Interfaz:",
+        "settings_lang_desc": "Cambie el idioma de la aplicación al instante.",
+        "settings_fps_label": "Tasa de Cuadros de la Cámara (FPS):",
+        "settings_fps_desc": "Límite de FPS de captura. Se recomienda 30 FPS. Baje a 15 o 20 FPS para reducir el uso de CPU.",
+        "settings_version_label": "Versión Instalada:",
+        "settings_version_info": "Sentinel v{version} (Compilación Nativa x64)",
+        "settings_engine_info": "Motor: dlib C++ & PySide6 & Búsqueda Vectorial BLAS",
+        "settings_btn_check_update": "Buscar Actualizaciones Ahora",
+        "settings_btn_save": "Guardar y Cerrar",
     },
 }
 

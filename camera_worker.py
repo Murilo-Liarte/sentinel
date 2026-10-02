@@ -114,6 +114,12 @@ class CameraWorker(QThread):
         # object_id -> (emotion: str, last_analyzed_time: float)
         self._emotion_cache: Dict[int, Tuple[str, float]] = {}
 
+        # ── FPS Configuration ────────────────────────────────────────────────
+        try:
+            self._target_fps = int(database.get_setting("target_fps", "30"))
+        except (ValueError, TypeError):
+            self._target_fps = 30
+
         # ── Tracked Object Info for HUD Drawing ──────────────────────────────
         # object_id -> (box: (x1, y1, x2, y2), name: str, user_id: Optional[int], emotion: str, conf: float)
         self._tracked_display: Dict[int, Tuple[Tuple[int,int,int,int], str, Optional[int], str, float]] = {}
@@ -158,6 +164,11 @@ class CameraWorker(QThread):
         self._ai_trigger_event.set()
         if self._ai_thread and self._ai_thread.is_alive():
             self._ai_thread.join(timeout=1.0)
+
+    def set_target_fps(self, fps: int) -> None:
+        """Dynamically adjust target frame rate (10 to 60 FPS)."""
+        self._target_fps = max(10, min(60, fps))
+        logger.info("CameraWorker target FPS set to %d", self._target_fps)
 
     # =========================================================================
     # Asynchronous AI Worker Thread (Vectorized Matrix Search)
@@ -341,7 +352,7 @@ class CameraWorker(QThread):
         # Request standard 640x480 resolution (prevents decoding heavy 1080p stream on VM)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_FPS, self._target_fps)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         self._ai_thread = threading.Thread(target=self._ai_worker_loop, daemon=True)
@@ -353,9 +364,9 @@ class CameraWorker(QThread):
             else i18n.t("camera_online_no_ai")
         )
 
-        target_dt = 1.0 / 30.0  # 30 FPS target governor
         try:
             while self._running:
+                target_dt = 1.0 / max(5, self._target_fps)
                 t_start = time.perf_counter()
                 ret, frame = cap.read()
                 if not ret:

@@ -50,6 +50,7 @@ a = Analysis(
         'emotion_detector',
         'i18n',
         'updater',
+        'settings_dialog',
         'pkg_resources',
         # scipy submodules used by face_recognition
         'scipy.spatial.transform._rotation_groups',
