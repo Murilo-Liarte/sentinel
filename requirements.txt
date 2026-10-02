@@ -1,0 +1,30 @@
+# Sentinel — Requirements
+# =======================
+# Install order matters on Windows:
+#   1. dlib-bin  (pre-compiled; no Visual Studio needed)
+#   2. face_recognition
+#   3. rest of the list
+
+# ── Core GUI ──────────────────────────────────────────────────────────────────
+PySide6>=6.5.0
+
+# ── Computer Vision ───────────────────────────────────────────────────────────
+opencv-python>=4.8.0
+
+# ── Face Recognition ─────────────────────────────────────────────────────────
+# dlib-bin provides a pre-compiled dlib wheel; no C++ compiler required.
+# If it fails for your Python version, see README.md for the manual wheel approach.
+dlib-bin>=19.24.0
+face_recognition>=1.3.0
+
+# ── Tracking / Math ───────────────────────────────────────────────────────────
+numpy>=1.24.0
+scipy>=1.11.0
+
+# ── Emotion Detection (secondary feature — optional but recommended) ──────────
+# deepface pulls TensorFlow; models are downloaded on first use (~100-400 MB).
+# Comment this line out if you want a lighter install without emotion detection.
+deepface>=0.0.89
+
+# ── Image I/O (used by deepface & crop saving) ────────────────────────────────
+Pillow>=10.0.0

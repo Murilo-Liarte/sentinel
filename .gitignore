@@ -1,0 +1,28 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Dedicated embedded Python & virtual environments
+.python311/
+venv/
+env/
+.venv/
+
+# Build & distribution outputs (binaries go to GitHub Releases, not git commits)
+build/
+dist/
+*.spec.bak
+
+# Local user runtime data, databases, and logs (protect privacy & keep repo clean)
+data/
+*.db
+*.sqlite3
+registros_sentinel_*.csv
+sentinel_log_*.csv
+
+# Operating System & IDE
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
