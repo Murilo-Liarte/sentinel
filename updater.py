@@ -34,7 +34,7 @@ import database
 logger = logging.getLogger("Sentinel.Updater")
 
 APP_VERSION = "1.0.0"
-DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/MuriloAugusto/sentinel/main/version.json"
+DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/Murilo-Liarte/sentinel/main/version.json"
 
 
 def parse_version(ver_str: str) -> Tuple[int, ...]:

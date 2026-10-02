@@ -111,6 +111,8 @@ class CameraWorker(QThread):
         # ── Identity Cache per Tracked Face ──────────────────────────────────
         # object_id -> (name: str, db_id: Optional[int], last_encoded_time: float)
         self._identity_cache: Dict[int, Tuple[str, Optional[int], float]] = {}
+        # object_id -> (emotion: str, last_analyzed_time: float)
+        self._emotion_cache: Dict[int, Tuple[str, float]] = {}
 
         # ── Tracked Object Info for HUD Drawing ──────────────────────────────
         # object_id -> (box: (x1, y1, x2, y2), name: str, user_id: Optional[int], emotion: str, conf: float)
@@ -179,8 +181,10 @@ class CameraWorker(QThread):
             try:
                 frame_h, frame_w = frame.shape[:2]
 
-                # Fast face detection on downscaled image
-                small = cv2.resize(frame, (0, 0), fx=RECOGNITION_SCALE, fy=RECOGNITION_SCALE)
+                # Adaptive fast face detection on downscaled image (target width: 320px)
+                target_w = 320
+                scale = min(1.0, float(target_w) / max(1, frame_w))
+                small = cv2.resize(frame, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
                 rgb_small = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
 
                 # Acquire global lock to prevent collision with face capture
@@ -190,10 +194,10 @@ class CameraWorker(QThread):
                 if not locations:
                     with self._detections_lock:
                         self._latest_detections = []
-                    time.sleep(0.02)
+                    time.sleep(0.01)
                     continue
 
-                inv = 1.0 / RECOGNITION_SCALE
+                inv = 1.0 / scale
                 now = time.monotonic()
                 num_faces = len(locations)
 
@@ -285,20 +289,29 @@ class CameraWorker(QThread):
                         if t_id is not None:
                             self._identity_cache[t_id] = (name, db_id, now)
 
-                    # 3. Fast ONNX Emotion Analysis (~2ms)
-                    face_crop = frame[y1:y2, x1:x2]
-                    emotion = self._emotion.analyze(face_crop)
+                    # 3. Emotion Analysis (cached per tracked face for 1.5s to minimize CPU usage)
+                    cached_emo = self._emotion_cache.get(t_id) if t_id is not None else None
+                    if cached_emo is not None and (now - cached_emo[1]) < 1.5:
+                        emotion = cached_emo[0]
+                    else:
+                        face_crop = frame[y1:y2, x1:x2]
+                        emotion = self._emotion.analyze(face_crop)
+                        if t_id is not None:
+                            self._emotion_cache[t_id] = (emotion, now)
 
                     new_detections.append((box, name, db_id, emotion, conf))
 
                 with self._detections_lock:
                     self._latest_detections = new_detections
 
-                # Prune stale identities
+                # Prune stale identities & emotions
                 active_t_ids = set(self._tracker.objects.keys())
                 for oid in list(self._identity_cache.keys()):
                     if oid not in active_t_ids:
                         self._identity_cache.pop(oid, None)
+                for oid in list(self._emotion_cache.keys()):
+                    if oid not in active_t_ids:
+                        self._emotion_cache.pop(oid, None)
 
             except Exception as exc:
                 logger.debug("AI inference worker error: %s", exc)
@@ -314,13 +327,20 @@ class CameraWorker(QThread):
         self.status_message.emit(i18n.t("opening_camera"))
         self.reload_embeddings()
 
-        cap = cv2.VideoCapture(self.camera_index, cv2.CAP_ANY)
+        # Prefer DirectShow for high FPS and low latency on Windows / VMs
+        cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(self.camera_index, cv2.CAP_ANY)
+
         if not cap.isOpened():
             self.status_message.emit(
                 i18n.t("cannot_open_camera", index=self.camera_index)
             )
             return
 
+        # Request standard 640x480 resolution (prevents decoding heavy 1080p stream on VM)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         cap.set(cv2.CAP_PROP_FPS, 30)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
@@ -333,8 +353,10 @@ class CameraWorker(QThread):
             else i18n.t("camera_online_no_ai")
         )
 
+        target_dt = 1.0 / 30.0  # 30 FPS target governor
         try:
             while self._running:
+                t_start = time.perf_counter()
                 ret, frame = cap.read()
                 if not ret:
                     time.sleep(0.01)
@@ -351,7 +373,7 @@ class CameraWorker(QThread):
                 # ── Dispatch Frame to Background AI Worker (Non-blocking) ──
                 if not self._ai_trigger_event.is_set():
                     with self._detections_lock:
-                        self._pending_frame = frame.copy()
+                        self._pending_frame = frame
                         self._ai_trigger_event.set()
 
                 # ── Read Latest AI Detections ──────────────────────────────
@@ -382,6 +404,13 @@ class CameraWorker(QThread):
                 # ── Emit to UI at Native Display Rate ──────────────────────
                 q_img = self._to_qimage(annotated)
                 self.frame_ready.emit(q_img)
+
+                # Frame rate governor: maintain smooth 30 FPS without burning VM CPU
+                t_elapsed = time.perf_counter() - t_start
+                if t_elapsed < target_dt:
+                    time.sleep(target_dt - t_elapsed)
+                else:
+                    time.sleep(0.001)
 
         except Exception as exc:
             logger.exception("Unexpected error in CameraWorker loop")
