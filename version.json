@@ -1,7 +1,7 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "release_date": "2026-10-02",
   "download_url": "https://github.com/Murilo-Liarte/sentinel/releases/latest/download/Sentinel-Setup.exe",
-  "release_notes": "Sentinel v1.0.2:\n- Novo painel de Configuracoes (Arquivo -> Configuracoes) com abas Geral e Camera\n- Controle dinamico de FPS da camera (15, 20, 30 e 60 FPS) para reduzir uso de CPU\n- Exibicao da versao instalada e atalho direto para verificar atualizacoes\n- Troca instantanea de idioma integrada as configuracoes",
+  "release_notes": "Sentinel v1.0.3:\n- Menu Configuracoes agora diretamente na barra principal ao lado de Arquivo e Ajuda\n- Reinicio automatico completo do aplicativo apos atualizacao silenciosa\n- Atalhos diretos para Taxa de Quadros (FPS) e Idioma\n- Ajustes visuais e de usabilidade",
   "mandatory": false
 }

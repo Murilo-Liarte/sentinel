@@ -153,8 +153,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "update_error_msg": "Não foi possível verificar atualizações:\n{error}",
         "update_cancel": "Cancelar",
 
-        # Settings Dialog
-        "menu_settings": "Configurações...",
+        # Settings Menu & Dialog
+        "menu_settings": "Configurações",
+        "menu_open_settings": "Abrir Configurações...",
+        "menu_fps_settings": "Taxa de Quadros (FPS)...",
+        "menu_lang_settings": "Idioma da Interface...",
         "settings_dialog_title": "Configurações do Sentinel",
         "settings_tab_general": "Geral",
         "settings_tab_camera": "Câmera e Desempenho",
@@ -301,8 +304,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "update_error_msg": "Could not check for updates:\n{error}",
         "update_cancel": "Cancel",
 
-        # Settings Dialog
-        "menu_settings": "Settings...",
+        # Settings Menu & Dialog
+        "menu_settings": "Settings",
+        "menu_open_settings": "Open Settings...",
+        "menu_fps_settings": "Camera Frame Rate (FPS)...",
+        "menu_lang_settings": "Interface Language...",
         "settings_dialog_title": "Sentinel Settings",
         "settings_tab_general": "General",
         "settings_tab_camera": "Camera & Performance",
@@ -449,8 +455,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "update_error_msg": "No se pudieron comprobar las actualizaciones:\n{error}",
         "update_cancel": "Cancelar",
 
-        # Settings Dialog
-        "menu_settings": "Configuración...",
+        # Settings Menu & Dialog
+        "menu_settings": "Configuración",
+        "menu_open_settings": "Abrir Configuración...",
+        "menu_fps_settings": "Tasa de Cuadros (FPS)...",
+        "menu_lang_settings": "Idioma de la Interfaz...",
         "settings_dialog_title": "Configuración de Sentinel",
         "settings_tab_general": "General",
         "settings_tab_camera": "Cámara y Rendimiento",

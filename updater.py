@@ -24,7 +24,7 @@ from typing import Optional, Tuple
 
 from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QProgressBar, QTextEdit, QWidget
 )
 
@@ -33,7 +33,7 @@ import database
 
 logger = logging.getLogger("Sentinel.Updater")
 
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/Murilo-Liarte/sentinel/main/version.json"
 
 
@@ -327,6 +327,9 @@ class UpdateDialog(QDialog):
             self.status_label.setText("Starting installer...")
             success = apply_update(self.downloaded_installer_path, silent=True)
             if success:
+                if self.parent() and hasattr(self.parent(), "close"):
+                    self.parent().close()
+                QApplication.quit()
                 sys.exit(0)
             else:
                 self.status_label.setText(i18n.t("update_error_msg", error="Could not start installer."))

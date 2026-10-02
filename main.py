@@ -167,15 +167,28 @@ class SentinelWindow(QMainWindow):
         self.action_export_csv.triggered.connect(self._export_csv)
         self.menu_file.addAction(self.action_export_csv)
 
-        self.action_settings = QAction(i18n.t("menu_settings"), self)
-        self.action_settings.triggered.connect(self._show_settings)
-        self.menu_file.addAction(self.action_settings)
-
         self.menu_file.addSeparator()
 
         self.action_exit = QAction(i18n.t("menu_exit"), self)
         self.action_exit.triggered.connect(self.close)
         self.menu_file.addAction(self.action_exit)
+
+        # Settings Menu (beside File and Help)
+        self.menu_settings = mb.addMenu(i18n.t("menu_settings"))
+        self.action_open_settings = QAction(i18n.t("menu_open_settings"), self)
+        self.action_open_settings.setShortcut("Ctrl+,")
+        self.action_open_settings.triggered.connect(lambda: self._show_settings(tab_idx=0))
+        self.menu_settings.addAction(self.action_open_settings)
+
+        self.menu_settings.addSeparator()
+
+        self.action_fps_settings = QAction(i18n.t("menu_fps_settings"), self)
+        self.action_fps_settings.triggered.connect(lambda: self._show_settings(tab_idx=1))
+        self.menu_settings.addAction(self.action_fps_settings)
+
+        self.action_lang_settings = QAction(i18n.t("menu_lang_settings"), self)
+        self.action_lang_settings.triggered.connect(lambda: self._show_settings(tab_idx=0))
+        self.menu_settings.addAction(self.action_lang_settings)
 
         # Help Menu
         self.menu_help = mb.addMenu(i18n.t("menu_help"))
@@ -507,9 +520,12 @@ class SentinelWindow(QMainWindow):
         if hasattr(self, "menu_file"):
             self.menu_file.setTitle(i18n.t("menu_file"))
             self.action_export_csv.setText(i18n.t("menu_export_csv"))
-            if hasattr(self, "action_settings"):
-                self.action_settings.setText(i18n.t("menu_settings"))
             self.action_exit.setText(i18n.t("menu_exit"))
+        if hasattr(self, "menu_settings"):
+            self.menu_settings.setTitle(i18n.t("menu_settings"))
+            self.action_open_settings.setText(i18n.t("menu_open_settings"))
+            self.action_fps_settings.setText(i18n.t("menu_fps_settings"))
+            self.action_lang_settings.setText(i18n.t("menu_lang_settings"))
         if hasattr(self, "menu_help"):
             self.menu_help.setTitle(i18n.t("menu_help"))
             self.action_check_updates.setText(i18n.t("menu_check_updates"))
@@ -972,9 +988,9 @@ class SentinelWindow(QMainWindow):
             i18n.t("about_body", version=updater.APP_VERSION),
         )
 
-    def _show_settings(self) -> None:
+    def _show_settings(self, tab_idx: int = 0) -> None:
         """Open the Settings dialog modal."""
-        dlg = SettingsDialog(self, on_check_updates_cb=self._check_updates_manual)
+        dlg = SettingsDialog(self, on_check_updates_cb=self._check_updates_manual, initial_tab=tab_idx)
         dlg.settings_changed.connect(self._on_settings_changed)
         dlg.exec()
 

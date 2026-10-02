@@ -30,7 +30,7 @@ class SettingsDialog(QDialog):
     """
     settings_changed = Signal()
 
-    def __init__(self, parent=None, on_check_updates_cb: Optional[Callable] = None):
+    def __init__(self, parent=None, on_check_updates_cb: Optional[Callable] = None, initial_tab: int = 0):
         super().__init__(parent)
         self._on_check_updates_cb = on_check_updates_cb
 
@@ -40,6 +40,8 @@ class SettingsDialog(QDialog):
 
         self._init_ui()
         self._load_current_values()
+        if 0 <= initial_tab < self.tabs.count():
+            self.tabs.setCurrentIndex(initial_tab)
 
     def _init_ui(self):
         root = QVBoxLayout(self)
