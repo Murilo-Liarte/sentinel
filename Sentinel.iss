@@ -10,7 +10,7 @@
 ; -----------------------------------------------------------------------------
 
 #define MyAppName "Sentinel"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "Sentinel"
 #define MyAppExeName "Sentinel.exe"
 #define MyAppAssocName MyAppName + " File"
@@ -48,6 +48,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "styles.qss"; DestDir: "{app}"; Flags: ignoreversion
+Source: "styles_light.qss"; DestDir: "{app}"; Flags: ignoreversion
 Source: "sentinel.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -58,18 +59,24 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+function SetEnvironmentVariable(lpName, lpValue: String): Boolean;
+external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
 // Full automatic restart after silent background update with sanitized environment
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
-  AppExe: String;
-  CmdArgs: String;
 begin
   if (CurStep = ssDone) and WizardSilent then
   begin
-    AppExe := ExpandConstant('{app}\{#MyAppExeName}');
-    // Strip PyInstaller _MEIPASS variables and wait 1s for file release before launching
-    CmdArgs := '/c set "_MEIPASS2=" & set "_MEIPASS=" & timeout /t 1 /nobreak >nul & start "" "' + AppExe + '"';
-    Exec('cmd.exe', CmdArgs, ExpandConstant('{app}'), SW_HIDE, ewNoWait, ResultCode);
+    // 1. Purge PyInstaller environment variables
+    SetEnvironmentVariable('_MEIPASS2', '');
+    SetEnvironmentVariable('_MEIPASS', '');
+
+    // 2. Wait 2 seconds for previous process handles and locks to release
+    Sleep(2000);
+
+    // 3. Launch via Windows Shell (equivalent to double-clicking desktop shortcut)
+    ShellExec('open', ExpandConstant('{app}\{#MyAppExeName}'), '', ExpandConstant('{app}'), SW_SHOWNORMAL, ewNoWait, ResultCode);
   end;
 end;

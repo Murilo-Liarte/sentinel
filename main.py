@@ -56,8 +56,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-STYLE_PATH     = get_resource("styles.qss")
-MAX_LOG_ROWS   = 200   # Cap in-memory log table rows for speed
+DARK_STYLE_PATH  = get_resource("styles.qss")
+LIGHT_STYLE_PATH = get_resource("styles_light.qss")
+MAX_LOG_ROWS     = 200   # Cap in-memory log table rows for speed
 THUMBNAIL_SIZE = 48    # px — thumbnail column width/height
 
 # Direction color tags
@@ -154,12 +155,6 @@ class SentinelWindow(QMainWindow):
     # ── Menu Bar ─────────────────────────────────────────────────────────────
     def _build_menu_bar(self) -> None:
         mb = self.menuBar()
-        mb.setStyleSheet(
-            "QMenuBar { background-color: #0F172A; color: #E2E8F0; padding: 2px 8px; border-bottom: 1px solid #1E293B; } "
-            "QMenuBar::item:selected { background-color: #1E293B; border-radius: 4px; } "
-            "QMenu { background-color: #0F172A; color: #E2E8F0; border: 1px solid #334155; } "
-            "QMenu::item:selected { background-color: #1E293B; }"
-        )
 
         # File Menu
         self.menu_file = mb.addMenu(i18n.t("menu_file"))
@@ -257,15 +252,6 @@ class SentinelWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self._stop_camera)
 
-        # Camera selector
-        self.cam_label = QLabel(i18n.t("camera_label"))
-        self.cam_label.setObjectName("subtext")
-        self.cam_selector = QComboBox()
-        self.cam_selector.setFixedHeight(32)
-        self.cam_selector.setFixedWidth(75)
-        for i in range(4):
-            self.cam_selector.addItem(str(i))
-
         # Spacer
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -304,8 +290,6 @@ class SentinelWindow(QMainWindow):
 
         layout.addWidget(self.btn_start)
         layout.addWidget(self.btn_stop)
-        layout.addWidget(self.cam_label)
-        layout.addWidget(self.cam_selector)
         layout.addWidget(spacer)
         layout.addWidget(self.tw_label)
         layout.addWidget(self.tw_slider)
@@ -539,7 +523,6 @@ class SentinelWindow(QMainWindow):
 
         self.btn_start.setText(i18n.t("start"))
         self.btn_stop.setText(i18n.t("stop"))
-        self.cam_label.setText(i18n.t("camera_label"))
         self.tw_label.setText(i18n.t("tripwire_label"))
         self.tw_slider.setToolTip(i18n.t("tripwire_tooltip"))
         self.lang_label.setText(i18n.t("language_label"))
@@ -601,9 +584,11 @@ class SentinelWindow(QMainWindow):
     # =========================================================================
 
     def _apply_stylesheet(self) -> None:
-        if os.path.exists(STYLE_PATH):
+        theme = database.get_setting("theme", "dark")
+        target_path = LIGHT_STYLE_PATH if theme == "light" else DARK_STYLE_PATH
+        if os.path.exists(target_path):
             try:
-                with open(STYLE_PATH, "r", encoding="utf-8") as f:
+                with open(target_path, "r", encoding="utf-8") as f:
                     self.setStyleSheet(f.read())
             except Exception as exc:
                 logger.warning("Could not read stylesheet: %s", exc)
@@ -617,7 +602,11 @@ class SentinelWindow(QMainWindow):
         if self._worker and self._worker.isRunning():
             return
 
-        cam_idx = int(self.cam_selector.currentText())
+        try:
+            cam_idx = int(database.get_setting("camera_index", "0"))
+        except (ValueError, TypeError):
+            cam_idx = 0
+
         self._worker = CameraWorker(camera_index=cam_idx)
 
         # Connect signals
@@ -632,7 +621,6 @@ class SentinelWindow(QMainWindow):
         self._worker.start()
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
-        self.cam_selector.setEnabled(False)
 
     def _stop_camera(self) -> None:
         """Stop the CameraWorker thread gracefully."""
@@ -643,7 +631,6 @@ class SentinelWindow(QMainWindow):
 
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
-        self.cam_selector.setEnabled(True)
         self.video_label.setText(i18n.t("camera_offline"))
         self.video_label.setPixmap(QPixmap())
         self.status_bar.showMessage(i18n.t("camera_stopped"))
@@ -995,8 +982,11 @@ class SentinelWindow(QMainWindow):
         dlg.exec()
 
     def _on_settings_changed(self) -> None:
-        """Callback when language or camera FPS is modified in settings."""
-        # 1. Sync toolbar language selector
+        """Callback when theme, language, camera, or FPS is modified in settings."""
+        # 1. Apply active theme (Dark / Light)
+        self._apply_stylesheet()
+
+        # 2. Sync toolbar language selector
         cur_lang = i18n.get_language()
         for idx in range(self.lang_selector.count()):
             if self.lang_selector.itemData(idx) == cur_lang:
@@ -1005,16 +995,27 @@ class SentinelWindow(QMainWindow):
                 self.lang_selector.blockSignals(False)
                 break
 
-        # 2. Retranslate all UI labels
+        # 3. Retranslate all UI labels
         self._retranslate_ui()
 
-        # 3. Apply FPS if camera is currently running
+        # 4. Apply FPS if camera is currently running
         if self._worker:
             try:
                 fps = int(database.get_setting("target_fps", "30"))
                 self._worker.set_target_fps(fps)
             except Exception as exc:
                 logger.debug("Failed to set target FPS: %s", exc)
+
+        # 5. Check if camera device changed while running
+        try:
+            target_cam = int(database.get_setting("camera_index", "0"))
+            if self._worker and self._worker.isRunning():
+                if self._worker.camera_index != target_cam:
+                    logger.info("Switching running camera from %d to %d", self._worker.camera_index, target_cam)
+                    self._stop_camera()
+                    self._start_camera()
+        except Exception as exc:
+            logger.debug("Error updating camera device: %s", exc)
 
     # =========================================================================
     # Window close

@@ -170,6 +170,20 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "settings_engine_info": "Motor: dlib C++ & PySide6 & Busca Vetorial BLAS",
         "settings_btn_check_update": "Verificar Atualizações",
         "settings_btn_save": "Salvar e Fechar",
+
+        # Theme
+        "settings_theme_label": "Aparência e Tema:",
+        "settings_theme_desc": "Alterne entre o Modo Escuro e o Modo Claro (Dia).",
+        "theme_dark": "Modo Escuro (Padrão)",
+        "theme_light": "Modo Claro (Dia)",
+
+        # Camera Input
+        "settings_cam_label": "Dispositivo de Câmera:",
+        "settings_cam_desc": "Selecione o sensor de vídeo ou webcam a ser utilizado.",
+        "cam_device_0": "Câmera 0 (Padrão do Sistema / Integrada)",
+        "cam_device_1": "Câmera 1 (Dispositivo USB / Secundário)",
+        "cam_device_2": "Câmera 2 (Dispositivo Adicional)",
+        "cam_device_3": "Câmera 3 (Dispositivo Adicional)",
     },
 
     "en_US": {
@@ -321,6 +335,20 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "settings_engine_info": "Engine: dlib C++ & PySide6 & BLAS Vectorized Search",
         "settings_btn_check_update": "Check for Updates Now",
         "settings_btn_save": "Save and Close",
+
+        # Theme
+        "settings_theme_label": "Appearance & Theme:",
+        "settings_theme_desc": "Switch between Dark Mode and Light (Day) Mode.",
+        "theme_dark": "Dark Mode (Default)",
+        "theme_light": "Light Mode (Day)",
+
+        # Camera Input
+        "settings_cam_label": "Camera Input Device:",
+        "settings_cam_desc": "Select the webcam or video sensor used by Sentinel.",
+        "cam_device_0": "Camera 0 (System Default / Integrated)",
+        "cam_device_1": "Camera 1 (USB Device / Secondary)",
+        "cam_device_2": "Camera 2 (Additional Device)",
+        "cam_device_3": "Camera 3 (Additional Device)",
     },
 
     "es_ES": {
@@ -472,6 +500,20 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "settings_engine_info": "Motor: dlib C++ & PySide6 & Búsqueda Vectorial BLAS",
         "settings_btn_check_update": "Buscar Actualizaciones Ahora",
         "settings_btn_save": "Guardar y Cerrar",
+
+        # Theme
+        "settings_theme_label": "Apariencia y Tema:",
+        "settings_theme_desc": "Cambie entre el Modo Oscuro y el Modo Claro (Día).",
+        "theme_dark": "Modo Oscuro (Predeterminado)",
+        "theme_light": "Modo Claro (Día)",
+
+        # Camera Input
+        "settings_cam_label": "Dispositivo de Cámara:",
+        "settings_cam_desc": "Seleccione el sensor de video o cámara web a utilizar.",
+        "cam_device_0": "Cámara 0 (Predeterminada del Sistema / Integrada)",
+        "cam_device_1": "Cámara 1 (Dispositivo USB / Secundario)",
+        "cam_device_2": "Cámara 2 (Dispositivo Adicional)",
+        "cam_device_3": "Cámara 3 (Dispositivo Adicional)",
     },
 }
 

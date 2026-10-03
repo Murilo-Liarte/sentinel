@@ -31,6 +31,7 @@ except ImportError:
 # ── Data files to include ──────────────────────────────────────────────────────
 datas = [
     ('styles.qss', '.'),                 # QSS dark theme → root of bundle
+    ('styles_light.qss', '.'),           # QSS light theme → root of bundle
     ('sentinel.ico', '.'),               # Icon for window
     ('models/emotion-ferplus-8.onnx', 'models'), # Emotion ONNX model
 ] + face_models_data

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "release_date": "2026-10-02",
   "download_url": "https://github.com/Murilo-Liarte/sentinel/releases/latest/download/Sentinel-Setup.exe",
-  "release_notes": "Sentinel v1.0.4:\n- Correcao definitiva do erro 'Failed to load Python DLL' no reinicio automatico\n- Higienizacao completa de variaveis de ambiente (_MEIPASS2) na inicializacao\n- Abertura suave e independente do aplicativo atualizado",
+  "release_notes": "Sentinel v1.0.5:\n- Novo seletor de tema na aba Geral (Modo Escuro / Modo Claro Dia)\n- Seletor de dispositivo de camera claro e descritivo na aba Camera\n- Barra de ferramentas limpa e simplificada\n- Reinicio automatico nativo via Windows Shell apos atualizacao silenciosa",
   "mandatory": false
 }
