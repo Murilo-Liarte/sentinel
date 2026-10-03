@@ -220,8 +220,9 @@ class UserEditDialog(QDialog):
 
         title_key = "user_dialog_edit_title" if self.is_edit else "user_dialog_create_title"
         self.setWindowTitle(i18n.t(title_key))
-        self.setFixedSize(540, 560)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinMaxButtonsHint | Qt.WindowType.WindowCloseButtonHint)
+        self.setMinimumSize(500, 520)
+        self.resize(560, 580)
 
         self._init_ui()
         if self.is_edit:
@@ -577,8 +578,9 @@ class UserManagerDialog(QDialog):
         self.camera_worker = camera_worker
 
         self.setWindowTitle(i18n.t("user_mgr_title"))
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinMaxButtonsHint | Qt.WindowType.WindowCloseButtonHint)
+        self.setMinimumSize(780, 480)
         self.resize(920, 600)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         self._init_ui()
         self._refresh_table()

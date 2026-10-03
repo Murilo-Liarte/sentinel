@@ -37,8 +37,13 @@ class SettingsDialog(QDialog):
         self._on_check_updates_cb = on_check_updates_cb
 
         self.setWindowTitle(i18n.t("settings_dialog_title"))
-        self.setFixedSize(540, 480)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowMinMaxButtonsHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        self.setMinimumSize(480, 420)
+        self.resize(560, 500)
 
         self._init_ui()
         self._load_current_values()

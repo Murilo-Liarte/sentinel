@@ -33,7 +33,7 @@ import database
 
 logger = logging.getLogger("Sentinel.Updater")
 
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/Murilo-Liarte/sentinel/main/version.json"
 
 
@@ -252,8 +252,9 @@ class UpdateDialog(QDialog):
         self.downloaded_installer_path: Optional[str] = None
 
         self.setWindowTitle(i18n.t("update_dialog_title"))
-        self.setFixedSize(500, 380)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinMaxButtonsHint | Qt.WindowType.WindowCloseButtonHint)
+        self.setMinimumSize(460, 360)
+        self.resize(520, 420)
 
         self._init_ui()
 

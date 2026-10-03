@@ -48,6 +48,7 @@ from app_paths import get_resource
 from camera_worker import CameraWorker
 from settings_dialog import SettingsDialog
 from user_manager_dialog import UserManagerDialog, UserEditDialog
+from history_dialog import EventHistoryDialog
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -159,6 +160,11 @@ class SentinelWindow(QMainWindow):
 
         # File Menu
         self.menu_file = mb.addMenu(i18n.t("menu_file"))
+        self.action_view_history = QAction(i18n.t("menu_view_history"), self)
+        self.action_view_history.setShortcut("Ctrl+H")
+        self.action_view_history.triggered.connect(self._show_history_dialog)
+        self.menu_file.addAction(self.action_view_history)
+
         self.action_export_csv = QAction(i18n.t("menu_export_csv"), self)
         self.action_export_csv.triggered.connect(self._export_csv)
         self.menu_file.addAction(self.action_export_csv)
@@ -355,6 +361,11 @@ class SentinelWindow(QMainWindow):
         header_row.addWidget(self.log_title)
         header_row.addStretch()
 
+        self.btn_full_history = QPushButton(i18n.t("btn_full_history"))
+        self.btn_full_history.setFixedHeight(26)
+        self.btn_full_history.setToolTip(i18n.t("menu_view_history"))
+        self.btn_full_history.clicked.connect(self._show_history_dialog)
+
         self.btn_clear = QPushButton(i18n.t("btn_clear"))
         self.btn_clear.setFixedHeight(26)
         self.btn_clear.setToolTip(i18n.t("clear_tooltip"))
@@ -364,6 +375,7 @@ class SentinelWindow(QMainWindow):
         self.btn_export.setFixedHeight(26)
         self.btn_export.clicked.connect(self._export_csv)
 
+        header_row.addWidget(self.btn_full_history)
         header_row.addWidget(self.btn_clear)
         header_row.addWidget(self.btn_export)
         layout.addLayout(header_row)
@@ -535,6 +547,8 @@ class SentinelWindow(QMainWindow):
         # Menu bar
         if hasattr(self, "menu_file"):
             self.menu_file.setTitle(i18n.t("menu_file"))
+            if hasattr(self, "action_view_history"):
+                self.action_view_history.setText(i18n.t("menu_view_history"))
             self.action_export_csv.setText(i18n.t("menu_export_csv"))
             self.action_exit.setText(i18n.t("menu_exit"))
         if hasattr(self, "menu_users"):
@@ -575,6 +589,9 @@ class SentinelWindow(QMainWindow):
             self.video_label.setText(i18n.t("camera_offline"))
 
         self.log_title.setText(i18n.t("event_log"))
+        if hasattr(self, "btn_full_history"):
+            self.btn_full_history.setText(i18n.t("btn_full_history"))
+            self.btn_full_history.setToolTip(i18n.t("menu_view_history"))
         self.btn_clear.setText(i18n.t("btn_clear"))
         self.btn_clear.setToolTip(i18n.t("clear_tooltip"))
         self.btn_export.setText(i18n.t("btn_export"))
@@ -975,9 +992,14 @@ class SentinelWindow(QMainWindow):
     # Log panel helpers
     # =========================================================================
 
+    def _show_history_dialog(self) -> None:
+        """Open the dedicated Facial Recordings & Event History Center."""
+        dlg = EventHistoryDialog(parent=self)
+        dlg.exec()
+
     def _restore_logs(self) -> None:
-        """Populate the log table with the most recent 100 events from the DB."""
-        rows = database.get_recent_logs(limit=100)
+        """Populate the log table with recent events since last lateral clear from DB."""
+        rows = database.get_recent_lateral_logs(limit=100)
         for row in rows:
             self._on_event(
                 {
@@ -990,7 +1012,10 @@ class SentinelWindow(QMainWindow):
             )
 
     def _clear_log_display(self) -> None:
+        """Clear lateral event display and mark persistent cutoff marker in database."""
+        database.mark_lateral_logs_cleared()
         self.log_table.setRowCount(0)
+        self.status_bar.showMessage(i18n.t("lateral_cleared_status"), 5000)
 
     def _export_csv(self) -> None:
         """Open a save dialog and export all logs to a CSV file."""

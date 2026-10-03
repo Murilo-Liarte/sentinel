@@ -562,6 +562,120 @@ def get_recent_logs(limit: int = 100) -> List[sqlite3.Row]:
     return rows
 
 
+def get_recent_lateral_logs(limit: int = 100) -> List[sqlite3.Row]:
+    """
+    Fetch recent logs for the main window lateral tab, respecting the persistent cutoff marker.
+    If the user clicked 'Limpar', older events won't reappear on app restart.
+    """
+    cleared_id_str = get_setting("lateral_log_cleared_id", "0")
+    try:
+        cleared_id = int(cleared_id_str)
+    except ValueError:
+        cleared_id = 0
+
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        rows = cur.execute(
+            "SELECT * FROM logs WHERE id > ? ORDER BY id DESC LIMIT ?",
+            (cleared_id, limit),
+        ).fetchall()
+    return rows
+
+
+def mark_lateral_logs_cleared() -> int:
+    """
+    Mark all current logs as cleared from the lateral display without deleting from SQLite.
+    Returns the cutoff log id.
+    """
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute("SELECT COALESCE(MAX(id), 0) AS max_id FROM logs").fetchone()
+        max_id = int(row["max_id"]) if row else 0
+    set_setting("lateral_log_cleared_id", str(max_id))
+    logger.info("Marked lateral logs cleared up to id=%d", max_id)
+    return max_id
+
+
+def get_logs_filtered(
+    query: str = "",
+    direction: str = "",
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """
+    Query full event history supporting name search, direction filtering, and pagination.
+    Used by EventHistoryDialog to display all preserved recordings.
+    """
+    conditions = []
+    params: List[Any] = []
+
+    if query.strip():
+        pat = f"%{query.strip()}%"
+        conditions.append("(user_name LIKE ? OR emotion LIKE ?)")
+        params.extend([pat, pat])
+
+    if direction and direction != "all":
+        conditions.append("direction = ?")
+        params.append(direction.upper())
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    sql = f"""
+        SELECT id, timestamp, user_id, user_name, direction, emotion, crop_path
+        FROM logs
+        {where_clause}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+    """
+    params.extend([limit, offset])
+
+    with _get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+
+    return [
+        {
+            "id": r["id"],
+            "timestamp": str(r["timestamp"] or ""),
+            "user_id": r["user_id"],
+            "user_name": str(r["user_name"] or ""),
+            "direction": str(r["direction"] or ""),
+            "emotion": str(r["emotion"] or "Neutral"),
+            "crop_path": str(r["crop_path"] or ""),
+        }
+        for r in rows
+    ]
+
+
+def get_logs_stats() -> Dict[str, Any]:
+    """Return aggregate statistics for event history."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        total = cur.execute("SELECT COUNT(*) AS cnt FROM logs").fetchone()["cnt"]
+        enters = cur.execute("SELECT COUNT(*) AS cnt FROM logs WHERE direction = 'ENTER'").fetchone()["cnt"]
+        exits = cur.execute("SELECT COUNT(*) AS cnt FROM logs WHERE direction = 'EXIT'").fetchone()["cnt"]
+        unique_persons = cur.execute("SELECT COUNT(DISTINCT user_name) AS cnt FROM logs").fetchone()["cnt"]
+
+    return {
+        "total": int(total),
+        "enters": int(enters),
+        "exits": int(exits),
+        "unique_persons": int(unique_persons),
+    }
+
+
+def delete_log(log_id: int) -> None:
+    """Delete a single log entry and its associated crop file if present."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute("SELECT crop_path FROM logs WHERE id = ?", (log_id,)).fetchone()
+        if row and row["crop_path"] and os.path.exists(row["crop_path"]):
+            try:
+                os.remove(row["crop_path"])
+            except Exception as exc:
+                logger.debug("Failed to remove crop file %s: %s", row["crop_path"], exc)
+        cur.execute("DELETE FROM logs WHERE id = ?", (log_id,))
+    logger.info("Deleted log event id=%d", log_id)
+
+
 def export_logs_csv(filepath: str) -> int:
     """Export all logs to a CSV file."""
     with _get_connection() as conn:
@@ -578,3 +692,4 @@ def export_logs_csv(filepath: str) -> int:
 
     logger.info("Exported %d log rows to %s", len(rows), filepath)
     return len(rows)
+

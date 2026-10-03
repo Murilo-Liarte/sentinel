@@ -53,6 +53,7 @@ a = Analysis(
         'updater',
         'settings_dialog',
         'user_manager_dialog',
+        'history_dialog',
         'pkg_resources',
         # scipy submodules used by face_recognition
         'scipy.spatial.transform._rotation_groups',

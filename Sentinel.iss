@@ -10,7 +10,7 @@
 ; -----------------------------------------------------------------------------
 
 #define MyAppName "Sentinel"
-#define MyAppVersion "1.0.7"
+#define MyAppVersion "1.0.8"
 #define MyAppPublisher "Sentinel"
 #define MyAppExeName "Sentinel.exe"
 #define MyAppAssocName MyAppName + " File"
