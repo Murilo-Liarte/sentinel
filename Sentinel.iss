@@ -10,7 +10,7 @@
 ; -----------------------------------------------------------------------------
 
 #define MyAppName "Sentinel"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "Sentinel"
 #define MyAppExeName "Sentinel.exe"
 #define MyAppAssocName MyAppName + " File"
@@ -59,24 +59,35 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-function SetEnvironmentVariable(lpName, lpValue: String): Boolean;
-external 'SetEnvironmentVariableW@kernel32.dll stdcall';
-
 // Full automatic restart after silent background update with sanitized environment
 procedure CurStepChanged(CurStep: TSetupStep);
 var
+  BatPath: String;
+  BatContent: String;
+  AppDir: String;
+  ExePath: String;
   ResultCode: Integer;
 begin
   if (CurStep = ssDone) and WizardSilent then
   begin
-    // 1. Purge PyInstaller environment variables
-    SetEnvironmentVariable('_MEIPASS2', '');
-    SetEnvironmentVariable('_MEIPASS', '');
+    BatPath := ExpandConstant('{tmp}\sentinel_restart.bat');
+    AppDir := ExpandConstant('{app}');
+    ExePath := ExpandConstant('{app}\{#MyAppExeName}');
 
-    // 2. Wait 2 seconds for previous process handles and locks to release
-    Sleep(2000);
+    // 1. Purge PyInstaller environment variables completely using cmd.exe set "VAR="
+    // 2. Wait 2 seconds (ping) for old process handles to release
+    // 3. Switch to application directory and start executable cleanly
+    // 4. Batch file self-deletes upon completion
+    BatContent := '@echo off' + #13#10
+      + 'set "_MEIPASS2="' + #13#10
+      + 'set "_MEIPASS="' + #13#10
+      + 'ping 127.0.0.1 -n 3 >nul 2>&1' + #13#10
+      + 'cd /d "' + AppDir + '"' + #13#10
+      + 'start "" "' + ExePath + '"' + #13#10
+      + 'del "%~f0"' + #13#10;
 
-    // 3. Launch via Windows Shell (equivalent to double-clicking desktop shortcut)
-    ShellExec('open', ExpandConstant('{app}\{#MyAppExeName}'), '', ExpandConstant('{app}'), SW_SHOWNORMAL, ewNoWait, ResultCode);
+    SaveStringToFile(BatPath, BatContent, False);
+
+    Exec(ExpandConstant('{cmd}'), '/c "' + BatPath + '"', '', SW_HIDE, ewNoWait, ResultCode);
   end;
 end;
