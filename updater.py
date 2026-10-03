@@ -33,7 +33,7 @@ import database
 
 logger = logging.getLogger("Sentinel.Updater")
 
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/Murilo-Liarte/sentinel/main/version.json"
 
 
@@ -227,9 +227,14 @@ def apply_update(installer_path: str, silent: bool = True) -> bool:
     if silent:
         args.extend(["/SILENT", "/NORESTART", "/CLOSEAPPLICATIONS"])
 
+    # Sanitize environment: strip PyInstaller runtime temp dirs so child processes don't inherit them
+    clean_env = os.environ.copy()
+    clean_env.pop("_MEIPASS2", None)
+    clean_env.pop("_MEIPASS", None)
+
     logger.info("Launching installer: %s", " ".join(args))
     try:
-        subprocess.Popen(args, close_fds=True)
+        subprocess.Popen(args, env=clean_env, close_fds=True)
         return True
     except Exception as e:
         logger.exception("Failed to launch installer: %s", e)

@@ -10,7 +10,7 @@
 ; -----------------------------------------------------------------------------
 
 #define MyAppName "Sentinel"
-#define MyAppVersion "1.0.3"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "Sentinel"
 #define MyAppExeName "Sentinel.exe"
 #define MyAppAssocName MyAppName + " File"
@@ -58,13 +58,18 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-// Full automatic restart after silent background update
+// Full automatic restart after silent background update with sanitized environment
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  AppExe: String;
+  CmdArgs: String;
 begin
   if (CurStep = ssDone) and WizardSilent then
   begin
-    Exec(ExpandConstant('{app}\{#MyAppExeName}'), '', ExpandConstant('{app}'), SW_SHOWNORMAL, ewNoWait, ResultCode);
+    AppExe := ExpandConstant('{app}\{#MyAppExeName}');
+    // Strip PyInstaller _MEIPASS variables and wait 1s for file release before launching
+    CmdArgs := '/c set "_MEIPASS2=" & set "_MEIPASS=" & timeout /t 1 /nobreak >nul & start "" "' + AppExe + '"';
+    Exec('cmd.exe', CmdArgs, ExpandConstant('{app}'), SW_HIDE, ewNoWait, ResultCode);
   end;
 end;
