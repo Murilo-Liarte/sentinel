@@ -54,6 +54,7 @@ CROP_DIR             = get_crops_dir()
 COLOR_REGISTERED = (40, 200, 80)     # Green  — known person
 COLOR_UNKNOWN    = (40, 140, 255)    # Orange — unknown person
 COLOR_TRIPWIRE   = (60, 180, 255)    # Yellow-orange tripwire
+COLOR_BLOCKED    = (40, 40, 235)     # Red    — blocked/inactive person
 
 # ── Face Recognition Loader ──────────────────────────────────────────────────
 try:
@@ -124,6 +125,10 @@ class CameraWorker(QThread):
         # object_id -> (box: (x1, y1, x2, y2), name: str, user_id: Optional[int], emotion: str, conf: float)
         self._tracked_display: Dict[int, Tuple[Tuple[int,int,int,int], str, Optional[int], str, float]] = {}
 
+        # User status cache (active vs inactive/blocked) and throttled last_seen updater
+        self._user_status_map: Dict[int, str] = {}
+        self._last_seen_updated: Dict[int, float] = {}
+
         os.makedirs(CROP_DIR, exist_ok=True)
 
     # =========================================================================
@@ -143,10 +148,12 @@ class CameraWorker(QThread):
         """
         try:
             matrix, names, ids = database.get_known_matrix()
+            status_map = database.get_user_status_map()
             with self._matrix_lock:
                 self._known_matrix = matrix
                 self._known_names  = names
                 self._known_ids    = ids
+                self._user_status_map = status_map
 
             with self._detections_lock:
                 self._identity_cache.clear()
@@ -473,6 +480,17 @@ class CameraWorker(QThread):
 
         self._tracked_display = new_display
 
+        # Throttled last_seen updater for recognized enrolled faces (once per min)
+        now_ts = time.time()
+        for oid, det in new_display.items():
+            db_id = det[2]
+            if db_id and (now_ts - self._last_seen_updated.get(db_id, 0.0) > 60.0):
+                self._last_seen_updated[db_id] = now_ts
+                try:
+                    database.update_user_last_seen(db_id)
+                except Exception:
+                    pass
+
     def _handle_crossing(
         self,
         frame:      np.ndarray,
@@ -592,25 +610,42 @@ class CameraWorker(QThread):
             info = self._tracked_display.get(obj_id)
 
             if info:
-                box, name, _, emotion, _ = info
+                box, name, db_id, emotion, _ = info
                 x1, y1, x2, y2 = box
-                color = COLOR_REGISTERED if name != unknown_str else COLOR_UNKNOWN
+
+                is_blocked = False
+                if db_id and self._user_status_map.get(db_id) == "inactive":
+                    is_blocked = True
+
+                if is_blocked:
+                    color = COLOR_BLOCKED
+                elif name != unknown_str:
+                    color = COLOR_REGISTERED
+                else:
+                    color = COLOR_UNKNOWN
 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-                # Modern badge: Name + Emotion
+                # Modern badge: Name + Emotion / [BLOQUEADO]
                 loc_emotion = i18n.translate_emotion(emotion)
-                text = f" {name} [{loc_emotion}] "
+                if is_blocked:
+                    blocked_tag = i18n.t("hud_blocked")
+                    text = f" {name} [{blocked_tag}] "
+                else:
+                    text = f" {name} [{loc_emotion}] "
+
                 (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
                 badge_y1 = max(0, y1 - th - 10)
                 cv2.rectangle(frame, (x1, badge_y1), (x1 + tw, y1), color, -1)
                 cv2.putText(
                     frame, text, (x1, y1 - 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1, cv2.LINE_AA,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255) if is_blocked else (0, 0, 0), 1, cv2.LINE_AA,
                 )
 
             # Centroid tracking dot
             dot_color = COLOR_REGISTERED if (info and info[1] != unknown_str) else COLOR_UNKNOWN
+            if info and info[2] and self._user_status_map.get(info[2]) == "inactive":
+                dot_color = COLOR_BLOCKED
             cv2.circle(frame, (cx, cy), 4, dot_color, -1)
 
         return frame

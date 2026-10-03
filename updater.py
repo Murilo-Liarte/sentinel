@@ -25,7 +25,7 @@ from typing import Optional, Tuple
 from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QProgressBar, QTextEdit, QWidget
+    QPushButton, QProgressBar, QTextEdit, QWidget, QMessageBox
 )
 
 import i18n
@@ -33,7 +33,7 @@ import database
 
 logger = logging.getLogger("Sentinel.Updater")
 
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/Murilo-Liarte/sentinel/main/version.json"
 
 
@@ -328,12 +328,26 @@ class UpdateDialog(QDialog):
 
     def _on_action_clicked(self):
         if self.downloaded_installer_path:
-            # Install and restart
+            # Inform user before closing and applying silent update
+            instruction = i18n.t("update_instruction_msg", version=self.update_info.version)
+            QMessageBox.information(self, i18n.t("update_ready_title"), instruction)
+
             self.status_label.setText("Starting installer...")
+
+            # Clean shutdown of camera and parent window to release file & hardware locks
+            if self.parent():
+                if hasattr(self.parent(), "_worker") and self.parent()._worker:
+                    try:
+                        self.parent()._worker.stop()
+                        self.parent()._worker.wait(1000)
+                    except Exception:
+                        pass
+                if hasattr(self.parent(), "close"):
+                    self.parent().close()
+
+            time.sleep(0.5)
             success = apply_update(self.downloaded_installer_path, silent=True)
             if success:
-                if self.parent() and hasattr(self.parent(), "close"):
-                    self.parent().close()
                 QApplication.quit()
                 sys.exit(0)
             else:
@@ -364,7 +378,7 @@ class UpdateDialog(QDialog):
         self.downloaded_installer_path = path
         self.progress_bar.setValue(100)
         self.status_label.setText(i18n.t("update_download_complete"))
-        self.btn_action.setText(i18n.t("update_install_restart"))
+        self.btn_action.setText(i18n.t("update_install_now"))
         self.btn_action.setEnabled(True)
 
     def _on_download_error(self, error: str):

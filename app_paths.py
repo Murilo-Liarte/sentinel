@@ -64,3 +64,11 @@ def get_crops_dir() -> str:
     crops = os.path.join(get_app_data_dir(), "crops")
     os.makedirs(crops, exist_ok=True)
     return crops
+
+
+def get_avatars_dir() -> str:
+    """Persistent directory for enrolled user portrait avatars."""
+    avatars = os.path.join(get_app_data_dir(), "avatars")
+    os.makedirs(avatars, exist_ok=True)
+    return avatars
+

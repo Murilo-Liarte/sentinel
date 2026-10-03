@@ -47,6 +47,7 @@ import updater
 from app_paths import get_resource
 from camera_worker import CameraWorker
 from settings_dialog import SettingsDialog
+from user_manager_dialog import UserManagerDialog, UserEditDialog
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -168,7 +169,25 @@ class SentinelWindow(QMainWindow):
         self.action_exit.triggered.connect(self.close)
         self.menu_file.addAction(self.action_exit)
 
-        # Settings Menu (beside File and Help)
+        # Users Menu
+        self.menu_users = mb.addMenu(i18n.t("menu_users"))
+        self.action_manage_users = QAction(i18n.t("menu_manage_users"), self)
+        self.action_manage_users.setShortcut("Ctrl+U")
+        self.action_manage_users.triggered.connect(self._show_user_manager)
+        self.menu_users.addAction(self.action_manage_users)
+
+        self.action_new_user = QAction(i18n.t("menu_new_user"), self)
+        self.action_new_user.setShortcut("Ctrl+N")
+        self.action_new_user.triggered.connect(self._show_new_user_dialog)
+        self.menu_users.addAction(self.action_new_user)
+
+        self.menu_users.addSeparator()
+
+        self.action_export_users = QAction(i18n.t("menu_export_users"), self)
+        self.action_export_users.triggered.connect(self._export_users_csv)
+        self.menu_users.addAction(self.action_export_users)
+
+        # Settings Menu (beside File, Users, and Help)
         self.menu_settings = mb.addMenu(i18n.t("menu_settings"))
         self.action_open_settings = QAction(i18n.t("menu_open_settings"), self)
         self.action_open_settings.setShortcut("Ctrl+,")
@@ -396,6 +415,12 @@ class SentinelWindow(QMainWindow):
         header_row.addWidget(self.user_title)
         header_row.addStretch()
         header_row.addWidget(self.user_count_label)
+
+        self.btn_open_user_mgr = QPushButton(i18n.t("btn_manage_users"))
+        self.btn_open_user_mgr.setFixedHeight(24)
+        self.btn_open_user_mgr.setStyleSheet("font-size: 11px; padding: 2px 8px;")
+        self.btn_open_user_mgr.clicked.connect(self._show_user_manager)
+        header_row.addWidget(self.btn_open_user_mgr)
         layout.addLayout(header_row)
 
         # Search / filter box
@@ -421,6 +446,7 @@ class SentinelWindow(QMainWindow):
         self.user_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.user_table.verticalHeader().setVisible(False)
         self.user_table.setShowGrid(False)
+        self.user_table.cellDoubleClicked.connect(self._on_user_table_double_clicked)
         self.user_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
         )
@@ -470,6 +496,11 @@ class SentinelWindow(QMainWindow):
         self.btn_save.setToolTip(i18n.t("btn_save_tooltip"))
         self.btn_save.clicked.connect(self._save_registration)
 
+        self.btn_full_register = QPushButton(i18n.t("btn_full_register"))
+        self.btn_full_register.setFixedHeight(30)
+        self.btn_full_register.setToolTip(i18n.t("user_dialog_create_title"))
+        self.btn_full_register.clicked.connect(self._show_new_user_dialog)
+
         self.capture_status = QLabel(i18n.t("status_no_face_yet"))
         self.capture_status.setObjectName("subtext")
 
@@ -479,6 +510,7 @@ class SentinelWindow(QMainWindow):
         layout.addWidget(self.role_selector)
         layout.addWidget(self.btn_capture)
         layout.addWidget(self.btn_save)
+        layout.addWidget(self.btn_full_register)
         layout.addWidget(self.capture_status)
         layout.addStretch()
 
@@ -505,6 +537,11 @@ class SentinelWindow(QMainWindow):
             self.menu_file.setTitle(i18n.t("menu_file"))
             self.action_export_csv.setText(i18n.t("menu_export_csv"))
             self.action_exit.setText(i18n.t("menu_exit"))
+        if hasattr(self, "menu_users"):
+            self.menu_users.setTitle(i18n.t("menu_users"))
+            self.action_manage_users.setText(i18n.t("menu_manage_users"))
+            self.action_new_user.setText(i18n.t("menu_new_user"))
+            self.action_export_users.setText(i18n.t("menu_export_users"))
         if hasattr(self, "menu_settings"):
             self.menu_settings.setTitle(i18n.t("menu_settings"))
             self.action_open_settings.setText(i18n.t("menu_open_settings"))
@@ -514,6 +551,12 @@ class SentinelWindow(QMainWindow):
             self.menu_help.setTitle(i18n.t("menu_help"))
             self.action_check_updates.setText(i18n.t("menu_check_updates"))
             self.action_about.setText(i18n.t("menu_about"))
+
+        if hasattr(self, "btn_open_user_mgr"):
+            self.btn_open_user_mgr.setText(i18n.t("btn_manage_users"))
+        if hasattr(self, "btn_full_register"):
+            self.btn_full_register.setText(i18n.t("btn_full_register"))
+            self.btn_full_register.setToolTip(i18n.t("user_dialog_create_title"))
 
         # Update banner
         if hasattr(self, "update_banner_label") and self._latest_update_info:
@@ -834,7 +877,9 @@ class SentinelWindow(QMainWindow):
                 row = self.user_table.rowCount()
                 self.user_table.insertRow(row)
 
-                self.user_table.setItem(row, 0, QTableWidgetItem(name))
+                item_name = QTableWidgetItem(name)
+                item_name.setData(Qt.ItemDataRole.UserRole, uid)
+                self.user_table.setItem(row, 0, item_name)
                 self.user_table.setItem(row, 1, QTableWidgetItem(role))
 
                 reg_display = reg_at[:16] if len(reg_at) >= 16 else reg_at
@@ -871,6 +916,59 @@ class SentinelWindow(QMainWindow):
                 self,
                 i18n.t("error_deleting_title"),
                 i18n.t("error_deleting_msg", error=str(exc)),
+            )
+
+    def _show_user_manager(self) -> None:
+        """Open the dedicated User Management Center dialog."""
+        dlg = UserManagerDialog(camera_worker=self._worker, parent=self)
+        dlg.database_changed.connect(self._on_user_database_changed)
+        dlg.exec()
+
+    def _show_new_user_dialog(self) -> None:
+        """Open the detailed New User Registration dialog."""
+        dlg = UserEditDialog(parent=self, camera_worker=self._worker)
+        dlg.user_saved.connect(lambda uid: self._on_user_database_changed())
+        dlg.exec()
+
+    def _on_user_table_double_clicked(self, row: int, col: int) -> None:
+        """Open user editor when double clicking row in sidebar table."""
+        name_item = self.user_table.item(row, 0)
+        if name_item:
+            uid = name_item.data(Qt.ItemDataRole.UserRole)
+            if uid:
+                dlg = UserEditDialog(user_id=uid, parent=self, camera_worker=self._worker)
+                dlg.user_saved.connect(lambda u: self._on_user_database_changed())
+                dlg.exec()
+
+    def _on_user_database_changed(self) -> None:
+        """Sync worker and reload sidebar table whenever user database changes."""
+        if self._worker:
+            self._worker.reload_embeddings()
+        self._refresh_user_table()
+
+    def _export_users_csv(self) -> None:
+        """Export all registered users to a CSV file."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            i18n.t("export_complete_title"),
+            "usuarios_sentinel.csv",
+            i18n.t("csv_filter"),
+        )
+        if not file_path:
+            return
+        try:
+            count = database.export_users_csv(file_path)
+            QMessageBox.information(
+                self,
+                i18n.t("export_complete_title"),
+                i18n.t("export_complete_msg", count=count, path=file_path),
+            )
+        except Exception as exc:
+            logger.exception("Failed to export users to CSV: %s", exc)
+            QMessageBox.critical(
+                self,
+                i18n.t("error_saving_title"),
+                str(exc),
             )
 
     # =========================================================================

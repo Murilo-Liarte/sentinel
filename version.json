@@ -1,7 +1,7 @@
 {
-  "version": "1.0.6",
-  "release_date": "2026-10-02",
+  "version": "1.0.7",
+  "release_date": "2026-10-03",
   "download_url": "https://github.com/Murilo-Liarte/sentinel/releases/latest/download/Sentinel-Setup.exe",
-  "release_notes": "Sentinel v1.0.6:\n- Correcao definitiva do reinicio automatico pos-atualizacao (limpeza completa de variaveis de ambiente PyInstaller via script isolado)\n- Seletor de tema (Escuro / Claro) e cameras integrados na aba Configuracoes",
+  "release_notes": "Sentinel v1.0.7:\n- Novo Gerenciador e Banco de Dados Completo de Usuarios (perfil detalhado, fotos, documentos, telefone, email, status e notas)\n- Cadastro por foto de arquivo (deteccao facial automatica e recorte de avatar) e por captura ao vivo\n- Exportacao completa da base de usuarios em CSV\n- Alertas visuais na camera para usuarios bloqueados / inativos\n- Fluxo de atualizacao simplificado e estavel com encerramento limpo",
   "mandatory": false
 }

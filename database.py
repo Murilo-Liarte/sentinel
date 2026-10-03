@@ -14,13 +14,14 @@ import csv
 import logging
 import os
 import pickle
+import shutil
 import sqlite3
 from contextlib import contextmanager
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from app_paths import get_db_path
+from app_paths import get_db_path, get_avatars_dir
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,21 @@ def _get_connection():
 
 
 def init_db() -> None:
-    """Create tables and performance indexes if they don't already exist."""
+    """Create tables, run safe schema migrations, and build performance indexes."""
+    # 1. Create a safety snapshot if database exists
+    if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 0:
+        try:
+            backup_path = DB_PATH + ".bak"
+            shutil.copy2(DB_PATH, backup_path)
+            logger.debug("Database safety snapshot saved at %s", backup_path)
+        except Exception as exc:
+            logger.warning("Could not create database backup: %s", exc)
+
+    # Ensure avatars directory exists
+    get_avatars_dir()
+
     with _get_connection() as conn:
+        # 2. Base tables creation
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS settings (
@@ -73,9 +87,36 @@ def init_db() -> None:
                 emotion    TEXT    NOT NULL DEFAULT 'Neutral',
                 crop_path  TEXT
             );
+            """
+        )
 
+        # 3. Defensive column migration for users table
+        existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        new_cols = [
+            ("phone", "TEXT NOT NULL DEFAULT ''"),
+            ("email", "TEXT NOT NULL DEFAULT ''"),
+            ("doc_id", "TEXT NOT NULL DEFAULT ''"),
+            ("notes", "TEXT NOT NULL DEFAULT ''"),
+            ("status", "TEXT NOT NULL DEFAULT 'active'"),
+            ("avatar_path", "TEXT NOT NULL DEFAULT ''"),
+            ("last_seen", "TEXT NOT NULL DEFAULT ''"),
+        ]
+        for col_name, col_def in new_cols:
+            if col_name not in existing_cols:
+                try:
+                    conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_def};")
+                    logger.info("Migrated users table: added column %s", col_name)
+                except Exception as exc:
+                    logger.error("Failed to add column %s: %s", col_name, exc)
+
+        # 4. Performance indexes
+        conn.executescript(
+            """
             CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
+            CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+            CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
             CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_logs_user_id ON logs(user_id);
             """
         )
     logger.info("Database initialised at %s", DB_PATH)
@@ -144,28 +185,130 @@ def _deserialize_embedding(blob: bytes) -> np.ndarray:
 # User management
 # ---------------------------------------------------------------------------
 
-def add_user(name: str, role: str, embedding: np.ndarray) -> int:
+def add_user(
+    name: str,
+    role: str,
+    embedding: np.ndarray,
+    phone: str = "",
+    email: str = "",
+    doc_id: str = "",
+    notes: str = "",
+    status: str = "active",
+    avatar_path: str = "",
+) -> int:
     """
-    Insert a new registered user with raw binary embedding storage.
+    Insert a new registered user with raw binary embedding storage and detailed profile info.
     """
     blob = _serialize_embedding(embedding)
     with _get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO users (name, role, embedding) VALUES (?, ?, ?)",
-            (name, role, blob),
+            """
+            INSERT INTO users (name, role, embedding, phone, email, doc_id, notes, status, avatar_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (name, role, blob, phone, email, doc_id, notes, status, avatar_path),
         )
         user_id = cur.lastrowid
-    logger.info("Registered user '%s' (id=%d, role=%s)", name, user_id, role)
+    logger.info("Registered user '%s' (id=%d, role=%s, status=%s)", name, user_id, role, status)
     return user_id
 
 
+def update_user(
+    user_id: int,
+    name: str,
+    role: str,
+    phone: str = "",
+    email: str = "",
+    doc_id: str = "",
+    notes: str = "",
+    status: str = "active",
+    avatar_path: Optional[str] = None,
+    embedding: Optional[np.ndarray] = None,
+) -> None:
+    """Update profile and optional biometric data for an existing user."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        if embedding is not None and avatar_path is not None:
+            blob = _serialize_embedding(embedding)
+            cur.execute(
+                """
+                UPDATE users
+                SET name = ?, role = ?, phone = ?, email = ?, doc_id = ?, notes = ?, status = ?, avatar_path = ?, embedding = ?
+                WHERE id = ?
+                """,
+                (name, role, phone, email, doc_id, notes, status, avatar_path, blob, user_id),
+            )
+        elif avatar_path is not None:
+            cur.execute(
+                """
+                UPDATE users
+                SET name = ?, role = ?, phone = ?, email = ?, doc_id = ?, notes = ?, status = ?, avatar_path = ?
+                WHERE id = ?
+                """,
+                (name, role, phone, email, doc_id, notes, status, avatar_path, user_id),
+            )
+        elif embedding is not None:
+            blob = _serialize_embedding(embedding)
+            cur.execute(
+                """
+                UPDATE users
+                SET name = ?, role = ?, phone = ?, email = ?, doc_id = ?, notes = ?, status = ?, embedding = ?
+                WHERE id = ?
+                """,
+                (name, role, phone, email, doc_id, notes, status, blob, user_id),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE users
+                SET name = ?, role = ?, phone = ?, email = ?, doc_id = ?, notes = ?, status = ?
+                WHERE id = ?
+                """,
+                (name, role, phone, email, doc_id, notes, status, user_id),
+            )
+    logger.info("Updated user id=%d ('%s')", user_id, name)
+
+
 def delete_user(user_id: int) -> None:
-    """Remove a user and all their biometric data from the database."""
+    """Remove a user, their biometric data, and optional avatar file."""
+    user = get_user_by_id(user_id)
+    if user and user.get("avatar_path") and os.path.exists(user["avatar_path"]):
+        try:
+            os.remove(user["avatar_path"])
+        except Exception as exc:
+            logger.debug("Could not remove avatar file %s: %s", user["avatar_path"], exc)
+
     with _get_connection() as conn:
         cur = conn.cursor()
         cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
     logger.info("Deleted user id=%d", user_id)
+
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    """Retrieve full user profile by id."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT id, name, role, phone, email, doc_id, notes, status, avatar_path, registered_at, last_seen "
+            "FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "name": str(row["name"]),
+        "role": str(row["role"]),
+        "phone": str(row["phone"] or ""),
+        "email": str(row["email"] or ""),
+        "doc_id": str(row["doc_id"] or ""),
+        "notes": str(row["notes"] or ""),
+        "status": str(row["status"] or "active"),
+        "avatar_path": str(row["avatar_path"] or ""),
+        "registered_at": str(row["registered_at"] or ""),
+        "last_seen": str(row["last_seen"] or ""),
+    }
 
 
 def get_all_users() -> List[Tuple[int, str, str, np.ndarray, str]]:
@@ -197,8 +340,8 @@ def get_users_filtered(query: str = "", limit: int = 100, offset: int = 0) -> Li
             like_pat = f"%{query.strip()}%"
             rows = cur.execute(
                 "SELECT id, name, role, registered_at FROM users "
-                "WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
-                (like_pat, limit, offset),
+                "WHERE name LIKE ? OR doc_id LIKE ? OR phone LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                (like_pat, like_pat, like_pat, limit, offset),
             ).fetchall()
         else:
             rows = cur.execute(
@@ -210,16 +353,139 @@ def get_users_filtered(query: str = "", limit: int = 100, offset: int = 0) -> Li
     return [(r["id"], str(r["name"]), str(r["role"]), str(r["registered_at"] or "")) for r in rows]
 
 
+def get_users_detailed(
+    query: str = "",
+    role: str = "",
+    status: str = "",
+    limit: int = 200,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """
+    Detailed query with comprehensive search across name, doc_id, phone, email,
+    and filtering by role and status.
+    """
+    conditions = []
+    params: List[Any] = []
+
+    if query.strip():
+        pat = f"%{query.strip()}%"
+        conditions.append("(name LIKE ? OR doc_id LIKE ? OR phone LIKE ? OR email LIKE ?)")
+        params.extend([pat, pat, pat, pat])
+
+    if role and role != "all":
+        conditions.append("role = ?")
+        params.append(role)
+
+    if status and status != "all":
+        conditions.append("status = ?")
+        params.append(status)
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    sql = f"""
+        SELECT id, name, role, phone, email, doc_id, notes, status, avatar_path, registered_at, last_seen
+        FROM users
+        {where_clause}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+    """
+    params.extend([limit, offset])
+
+    with _get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+
+    return [
+        {
+            "id": r["id"],
+            "name": str(r["name"]),
+            "role": str(r["role"]),
+            "phone": str(r["phone"] or ""),
+            "email": str(r["email"] or ""),
+            "doc_id": str(r["doc_id"] or ""),
+            "notes": str(r["notes"] or ""),
+            "status": str(r["status"] or "active"),
+            "avatar_path": str(r["avatar_path"] or ""),
+            "registered_at": str(r["registered_at"] or ""),
+            "last_seen": str(r["last_seen"] or ""),
+        }
+        for r in rows
+    ]
+
+
 def get_user_count(query: str = "") -> int:
     """Return total number of enrolled users matching optional filter."""
     with _get_connection() as conn:
         cur = conn.cursor()
         if query.strip():
             like_pat = f"%{query.strip()}%"
-            row = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE name LIKE ?", (like_pat,)).fetchone()
+            row = cur.execute(
+                "SELECT COUNT(*) AS cnt FROM users WHERE name LIKE ? OR doc_id LIKE ? OR phone LIKE ?",
+                (like_pat, like_pat, like_pat),
+            ).fetchone()
         else:
             row = cur.execute("SELECT COUNT(*) AS cnt FROM users").fetchone()
     return int(row["cnt"]) if row else 0
+
+
+def get_user_stats() -> Dict[str, Any]:
+    """Return aggregate counts: total, active, inactive, and breakdown by role."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        total = cur.execute("SELECT COUNT(*) AS cnt FROM users").fetchone()["cnt"]
+        active = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE status = 'active'").fetchone()["cnt"]
+        inactive = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE status != 'active'").fetchone()["cnt"]
+        roles_rows = cur.execute("SELECT role, COUNT(*) AS cnt FROM users GROUP BY role").fetchall()
+
+    roles_dict = {str(r["role"]): int(r["cnt"]) for r in roles_rows}
+    return {
+        "total": int(total),
+        "active": int(active),
+        "inactive": int(inactive),
+        "roles": roles_dict,
+    }
+
+
+def update_user_last_seen(user_id: int, timestamp: Optional[str] = None) -> None:
+    """Update last_seen timestamp when recognized in camera feed."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        if timestamp:
+            cur.execute("UPDATE users SET last_seen = ? WHERE id = ?", (timestamp, user_id))
+        else:
+            cur.execute("UPDATE users SET last_seen = datetime('now','localtime') WHERE id = ?", (user_id,))
+
+
+def get_user_status_map() -> Dict[int, str]:
+    """Map user_id -> status ('active', 'inactive'). Used by camera HUD to flag blocked individuals."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        rows = cur.execute("SELECT id, status FROM users").fetchall()
+    return {int(r["id"]): str(r["status"] or "active") for r in rows}
+
+
+def export_users_csv(filepath: str) -> int:
+    """Export the entire user database directory to CSV."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT id, name, role, doc_id, phone, email, status, registered_at, last_seen, notes
+            FROM users
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "ID", "Nome", "Função", "Documento/Apto", "Telefone", "Email",
+            "Status", "Data de Cadastro", "Última Detecção", "Observações"
+        ])
+        for row in rows:
+            writer.writerow(list(row))
+
+    logger.info("Exported %d users to %s", len(rows), filepath)
+    return len(rows)
+
 
 
 def get_known_matrix() -> Tuple[Optional[np.ndarray], List[str], List[int]]:
