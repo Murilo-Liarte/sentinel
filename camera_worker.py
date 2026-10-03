@@ -54,7 +54,8 @@ CROP_DIR             = get_crops_dir()
 COLOR_REGISTERED = (40, 200, 80)     # Green  — known person
 COLOR_UNKNOWN    = (40, 140, 255)    # Orange — unknown person
 COLOR_TRIPWIRE   = (60, 180, 255)    # Yellow-orange tripwire
-COLOR_BLOCKED    = (40, 40, 235)     # Red    — blocked/inactive person
+COLOR_BLOCKED    = (40, 40, 235)     # Red    — blocked person
+COLOR_INACTIVE   = (0, 165, 255)     # Amber/Orange — temporarily deactivated person
 
 # ── Face Recognition Loader ──────────────────────────────────────────────────
 try:
@@ -613,33 +614,38 @@ class CameraWorker(QThread):
                 box, name, db_id, emotion, _ = info
                 x1, y1, x2, y2 = box
 
-                is_blocked = False
-                if db_id and self._user_status_map.get(db_id) == "inactive":
-                    is_blocked = True
+                user_status = self._user_status_map.get(db_id, "active") if db_id else "active"
 
-                if is_blocked:
+                if user_status == "blocked":
                     color = COLOR_BLOCKED
+                    tag = i18n.t("hud_blocked")
+                    text = f" {name} [{tag}] "
+                    text_color = (255, 255, 255)
+                elif user_status == "inactive":
+                    color = COLOR_INACTIVE
+                    tag = i18n.t("hud_inactive")
+                    text = f" {name} [{tag}] "
+                    text_color = (255, 255, 255)
                 elif name != unknown_str:
                     color = COLOR_REGISTERED
+                    loc_emotion = i18n.translate_emotion(emotion)
+                    text = f" {name} [{loc_emotion}] "
+                    text_color = (0, 0, 0)
                 else:
                     color = COLOR_UNKNOWN
+                    loc_emotion = i18n.translate_emotion(emotion)
+                    text = f" {name} [{loc_emotion}] "
+                    text_color = (0, 0, 0)
 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-                # Modern badge: Name + Emotion / [BLOQUEADO]
-                loc_emotion = i18n.translate_emotion(emotion)
-                if is_blocked:
-                    blocked_tag = i18n.t("hud_blocked")
-                    text = f" {name} [{blocked_tag}] "
-                else:
-                    text = f" {name} [{loc_emotion}] "
-
+                # Modern badge: Name + Emotion / [BLOQUEADO] / [DESATIVADO]
                 (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
                 badge_y1 = max(0, y1 - th - 10)
                 cv2.rectangle(frame, (x1, badge_y1), (x1 + tw, y1), color, -1)
                 cv2.putText(
                     frame, text, (x1, y1 - 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255) if is_blocked else (0, 0, 0), 1, cv2.LINE_AA,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_color, 1, cv2.LINE_AA,
                 )
 
             # Centroid tracking dot

@@ -329,28 +329,28 @@ def get_all_users() -> List[Tuple[int, str, str, np.ndarray, str]]:
     return result
 
 
-def get_users_filtered(query: str = "", limit: int = 100, offset: int = 0) -> List[Tuple[int, str, str, str]]:
+def get_users_filtered(query: str = "", limit: int = 100, offset: int = 0) -> List[Tuple[int, str, str, str, str]]:
     """
     Fast paginated query for UI tables. Omit binary embedding for speed.
-    Returns: List of (id, name, role, registered_at)
+    Returns: List of (id, name, role, registered_at, status)
     """
     with _get_connection() as conn:
         cur = conn.cursor()
         if query.strip():
             like_pat = f"%{query.strip()}%"
             rows = cur.execute(
-                "SELECT id, name, role, registered_at FROM users "
+                "SELECT id, name, role, registered_at, COALESCE(status, 'active') AS status FROM users "
                 "WHERE name LIKE ? OR doc_id LIKE ? OR phone LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?",
                 (like_pat, like_pat, like_pat, limit, offset),
             ).fetchall()
         else:
             rows = cur.execute(
-                "SELECT id, name, role, registered_at FROM users "
+                "SELECT id, name, role, registered_at, COALESCE(status, 'active') AS status FROM users "
                 "ORDER BY id DESC LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
 
-    return [(r["id"], str(r["name"]), str(r["role"]), str(r["registered_at"] or "")) for r in rows]
+    return [(r["id"], str(r["name"]), str(r["role"]), str(r["registered_at"] or ""), str(r["status"] or "active")) for r in rows]
 
 
 def get_users_detailed(
@@ -427,12 +427,13 @@ def get_user_count(query: str = "") -> int:
 
 
 def get_user_stats() -> Dict[str, Any]:
-    """Return aggregate counts: total, active, inactive, and breakdown by role."""
+    """Return aggregate counts: total, active, inactive, blocked, and breakdown by role."""
     with _get_connection() as conn:
         cur = conn.cursor()
         total = cur.execute("SELECT COUNT(*) AS cnt FROM users").fetchone()["cnt"]
         active = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE status = 'active'").fetchone()["cnt"]
-        inactive = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE status != 'active'").fetchone()["cnt"]
+        inactive = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE status = 'inactive'").fetchone()["cnt"]
+        blocked = cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE status = 'blocked'").fetchone()["cnt"]
         roles_rows = cur.execute("SELECT role, COUNT(*) AS cnt FROM users GROUP BY role").fetchall()
 
     roles_dict = {str(r["role"]): int(r["cnt"]) for r in roles_rows}
@@ -440,8 +441,17 @@ def get_user_stats() -> Dict[str, Any]:
         "total": int(total),
         "active": int(active),
         "inactive": int(inactive),
+        "blocked": int(blocked),
         "roles": roles_dict,
     }
+
+
+def set_user_status(user_id: int, status: str) -> None:
+    """Quickly update access status ('active', 'inactive', 'blocked') for an enrolled user."""
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET status = ? WHERE id = ?", (status, user_id))
+    logger.info("Updated user %d status to '%s'", user_id, status)
 
 
 def update_user_last_seen(user_id: int, timestamp: Optional[str] = None) -> None:

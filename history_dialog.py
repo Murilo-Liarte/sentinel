@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 import i18n
 import database
+from app_paths import get_resource
 
 logger = logging.getLogger("Sentinel.HistoryDialog")
 
@@ -100,6 +101,10 @@ class ImagePreviewDialog(QDialog):
         self.setMinimumSize(360, 420)
         self.resize(480, 520)
 
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
@@ -168,6 +173,10 @@ class EventHistoryDialog(QDialog):
         )
         self.setMinimumSize(850, 520)
         self.resize(1020, 640)
+
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self._current_logs: List[Dict[str, Any]] = []
 

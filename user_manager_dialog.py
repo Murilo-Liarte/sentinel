@@ -24,12 +24,12 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QTextEdit, QFileDialog, QMessageBox, QFrame,
-    QProgressBar, QWidget, QAbstractItemView
+    QProgressBar, QWidget, QAbstractItemView, QMenu
 )
 
 import i18n
 import database
-from app_paths import get_avatars_dir
+from app_paths import get_avatars_dir, get_resource
 from camera_worker import _DLIB_LOCK, FACE_RECOGNITION_AVAILABLE
 
 if FACE_RECOGNITION_AVAILABLE:
@@ -224,6 +224,10 @@ class UserEditDialog(QDialog):
         self.setMinimumSize(500, 520)
         self.resize(560, 580)
 
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self._init_ui()
         if self.is_edit:
             self._load_existing_user()
@@ -315,8 +319,9 @@ class UserEditDialog(QDialog):
         lbl_status.setStyleSheet("font-weight: bold; font-size: 12px;")
         self.combo_status = QComboBox()
         self.combo_status.setFixedHeight(30)
-        self.combo_status.addItem(i18n.t("status_active"), "active")
-        self.combo_status.addItem(i18n.t("status_inactive"), "inactive")
+        self.combo_status.addItem(f"🟢 {i18n.t('status_active')}", "active")
+        self.combo_status.addItem(f"⏸️ {i18n.t('status_inactive')}", "inactive")
+        self.combo_status.addItem(f"🚫 {i18n.t('status_blocked')}", "blocked")
         status_box.addWidget(lbl_status)
         status_box.addWidget(self.combo_status)
         role_status_row.addLayout(status_box, 1)
@@ -582,6 +587,10 @@ class UserManagerDialog(QDialog):
         self.setMinimumSize(780, 480)
         self.resize(920, 600)
 
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self._init_ui()
         self._refresh_table()
 
@@ -614,12 +623,17 @@ class UserManagerDialog(QDialog):
         )
         self.stat_inactive_badge = QLabel("0")
         self.stat_inactive_badge.setStyleSheet(
+            "background-color: #451A03; color: #FDBA74; font-weight: bold; border-radius: 6px; padding: 6px 12px; font-size: 12px;"
+        )
+        self.stat_blocked_badge = QLabel("0")
+        self.stat_blocked_badge.setStyleSheet(
             "background-color: #450A0A; color: #F87171; font-weight: bold; border-radius: 6px; padding: 6px 12px; font-size: 12px;"
         )
 
         header_row.addWidget(self.stat_total_badge)
         header_row.addWidget(self.stat_active_badge)
         header_row.addWidget(self.stat_inactive_badge)
+        header_row.addWidget(self.stat_blocked_badge)
         root_layout.addLayout(header_row)
 
         # ── Toolbar: Search, Filters, Add Button, Export Button ──────────────
@@ -646,8 +660,9 @@ class UserManagerDialog(QDialog):
         self.status_filter = QComboBox()
         self.status_filter.setFixedHeight(32)
         self.status_filter.addItem(i18n.t("filter_all_statuses"), "all")
-        self.status_filter.addItem(i18n.t("status_active"), "active")
-        self.status_filter.addItem(i18n.t("status_inactive"), "inactive")
+        self.status_filter.addItem(f"🟢 {i18n.t('filter_status_active')}", "active")
+        self.status_filter.addItem(f"⏸️ {i18n.t('filter_status_inactive')}", "inactive")
+        self.status_filter.addItem(f"🚫 {i18n.t('filter_status_blocked')}", "blocked")
         self.status_filter.currentIndexChanged.connect(self._refresh_table)
         toolbar.addWidget(self.status_filter, stretch=1)
 
@@ -697,8 +712,10 @@ class UserManagerDialog(QDialog):
         h_header.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
 
         self.table.setColumnWidth(0, 52)
-        self.table.setColumnWidth(7, 130)
+        self.table.setColumnWidth(7, 185)
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_table_context_menu)
 
         root_layout.addWidget(self.table, stretch=1)
 
@@ -719,8 +736,9 @@ class UserManagerDialog(QDialog):
         # Update stats
         stats = database.get_user_stats()
         self.stat_total_badge.setText(f"{i18n.t('stat_total')}: {stats['total']}")
-        self.stat_active_badge.setText(f"{i18n.t('status_active')}: {stats['active']}")
-        self.stat_inactive_badge.setText(f"{i18n.t('status_inactive')}: {stats['inactive']}")
+        self.stat_active_badge.setText(f"{i18n.t('stat_active')}: {stats['active']}")
+        self.stat_inactive_badge.setText(f"{i18n.t('stat_inactive')}: {stats.get('inactive', 0)}")
+        self.stat_blocked_badge.setText(f"{i18n.t('stat_blocked')}: {stats.get('blocked', 0)}")
 
         users = database.get_users_detailed(query=query, role=role, status=status, limit=300)
 
@@ -762,24 +780,55 @@ class UserManagerDialog(QDialog):
             contact_str = u["phone"] or u["email"] or "-"
             self.table.setItem(row, 4, QTableWidgetItem(contact_str))
 
-            # 5. Status
-            status_text = i18n.t("status_active") if u["status"] == "active" else i18n.t("status_inactive")
-            status_item = QTableWidgetItem(status_text)
-            if u["status"] == "active":
-                status_item.setForeground(Qt.GlobalColor.green)
-            else:
-                status_item.setForeground(Qt.GlobalColor.red)
-            self.table.setItem(row, 5, status_item)
+            # 5. Status Badge
+            u_status = u["status"] or "active"
+            status_widget = QWidget()
+            status_layout = QHBoxLayout(status_widget)
+            status_layout.setContentsMargins(4, 4, 4, 4)
+            status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            badge = QLabel()
+            if u_status == "active":
+                badge.setText(f" 🟢 {i18n.t('status_active')} ")
+                badge.setStyleSheet(
+                    "background-color: #052E16; color: #4ADE80; font-weight: bold; "
+                    "border-radius: 4px; padding: 2px 6px; font-size: 11px;"
+                )
+            elif u_status == "inactive":
+                badge.setText(f" ⏸️ {i18n.t('status_inactive')} ")
+                badge.setStyleSheet(
+                    "background-color: #451A03; color: #FDBA74; font-weight: bold; "
+                    "border-radius: 4px; padding: 2px 6px; font-size: 11px;"
+                )
+            else:  # blocked
+                badge.setText(f" 🚫 {i18n.t('status_blocked')} ")
+                badge.setStyleSheet(
+                    "background-color: #450A0A; color: #F87171; font-weight: bold; "
+                    "border-radius: 4px; padding: 2px 6px; font-size: 11px;"
+                )
+            status_layout.addWidget(badge)
+            self.table.setCellWidget(row, 5, status_widget)
 
             # 6. Registered At
             reg_display = u["registered_at"][:16] if len(u["registered_at"]) >= 16 else u["registered_at"]
             self.table.setItem(row, 6, QTableWidgetItem(reg_display))
 
-            # 7. Action buttons (Edit & Delete)
+            # 7. Action buttons (Status, Edit & Delete)
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(4, 2, 4, 2)
             actions_layout.setSpacing(6)
+
+            btn_status = QPushButton(f"⚡ {i18n.t('btn_quick_status')}")
+            btn_status.setFixedHeight(26)
+            btn_status.setStyleSheet(
+                "QPushButton { background-color: #1E293B; border: 1px solid #334155; "
+                "border-radius: 4px; font-size: 11px; padding: 0 6px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #334155; }"
+            )
+            btn_status.clicked.connect(
+                lambda _, b=btn_status, user_id=uid, user_name=name: self._show_quick_status_menu(b, user_id, user_name)
+            )
 
             btn_edit = QPushButton(i18n.t("btn_edit"))
             btn_edit.setFixedHeight(26)
@@ -791,9 +840,58 @@ class UserManagerDialog(QDialog):
             btn_del.setToolTip(i18n.t("btn_delete_tooltip", name=name))
             btn_del.clicked.connect(lambda checked, user_id=uid, user_name=name: self._on_delete_user(user_id, user_name))
 
+            actions_layout.addWidget(btn_status)
             actions_layout.addWidget(btn_edit)
             actions_layout.addWidget(btn_del)
             self.table.setCellWidget(row, 7, actions_widget)
+
+    def _show_quick_status_menu(self, button: QPushButton, user_id: int, user_name: str):
+        """Open quick status toggle menu below the status button."""
+        menu = QMenu(self)
+        act_active = menu.addAction(f"🟢 {i18n.t('action_set_active')}")
+        act_active.triggered.connect(lambda: self._on_change_user_status(user_id, "active", user_name))
+
+        act_inactive = menu.addAction(f"⏸️ {i18n.t('action_set_inactive')}")
+        act_inactive.triggered.connect(lambda: self._on_change_user_status(user_id, "inactive", user_name))
+
+        act_blocked = menu.addAction(f"🚫 {i18n.t('action_set_blocked')}")
+        act_blocked.triggered.connect(lambda: self._on_change_user_status(user_id, "blocked", user_name))
+
+        menu.exec(button.mapToGlobal(button.rect().bottomLeft()))
+
+    def _on_table_context_menu(self, pos):
+        """Open context menu with status change and profile actions on right-click."""
+        index = self.table.indexAt(pos)
+        row = index.row()
+        if row < 0:
+            return
+
+        name_item = self.table.item(row, 1)
+        if not name_item:
+            return
+        uid = name_item.data(Qt.ItemDataRole.UserRole)
+        name = name_item.text()
+
+        menu = QMenu(self)
+        menu.addAction(f"🟢 {i18n.t('action_set_active')}", lambda: self._on_change_user_status(uid, "active", name))
+        menu.addAction(f"⏸️ {i18n.t('action_set_inactive')}", lambda: self._on_change_user_status(uid, "inactive", name))
+        menu.addAction(f"🚫 {i18n.t('action_set_blocked')}", lambda: self._on_change_user_status(uid, "blocked", name))
+        menu.addSeparator()
+        menu.addAction(f"✏️ {i18n.t('btn_edit')}", lambda: self._on_edit_user(uid))
+        menu.addAction(f"🗑️ {i18n.t('btn_delete') if i18n.t('btn_delete') else 'Excluir'}", lambda: self._on_delete_user(uid, name))
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def _on_change_user_status(self, user_id: int, new_status: str, user_name: str):
+        """Update access status directly from table action or context menu."""
+        try:
+            database.set_user_status(user_id, new_status)
+            if self.camera_worker:
+                self.camera_worker.reload_embeddings()
+            self._refresh_table()
+            self.database_changed.emit()
+        except Exception as exc:
+            logger.exception("Failed to change user status: %s", exc)
+            QMessageBox.critical(self, i18n.t("error_saving_title"), str(exc))
 
     def _on_cell_double_clicked(self, row: int, col: int):
         name_item = self.table.item(row, 1)

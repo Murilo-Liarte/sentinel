@@ -18,10 +18,11 @@ from datetime import datetime
 import cv2
 import numpy as np
 from PySide6.QtCore import Qt, Slot, QTimer
-from PySide6.QtGui import QImage, QPixmap, QAction
+from PySide6.QtGui import QImage, QPixmap, QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QMenu,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -83,6 +84,10 @@ class SentinelWindow(QMainWindow):
         self.setWindowTitle(i18n.t("app_title"))
         self.resize(1280, 800)
         self.setMinimumSize(960, 620)
+
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         # ── Pending registration state ─────────────────────────────────────
         self._pending_embedding = None   # np.ndarray | None
@@ -465,6 +470,8 @@ class SentinelWindow(QMainWindow):
         self.user_table.setColumnWidth(1, 90)
         self.user_table.setColumnWidth(2, 130)
         self.user_table.setColumnWidth(3, 40)
+        self.user_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.user_table.customContextMenuRequested.connect(self._on_sidebar_user_context_menu)
         layout.addWidget(self.user_table, stretch=1)
 
         return frame
@@ -890,12 +897,26 @@ class SentinelWindow(QMainWindow):
             users = database.get_users_filtered(query=search_query, limit=100)
 
             self.user_table.setRowCount(0)
-            for uid, name, role, reg_at in users:
+            for row_data in users:
+                uid, name, role, reg_at = row_data[0], row_data[1], row_data[2], row_data[3]
+                status = row_data[4] if len(row_data) > 4 else "active"
+
                 row = self.user_table.rowCount()
                 self.user_table.insertRow(row)
 
-                item_name = QTableWidgetItem(name)
+                if status == "blocked":
+                    prefix = "🚫 "
+                    tooltip_status = i18n.t("status_blocked")
+                elif status == "inactive":
+                    prefix = "⏸️ "
+                    tooltip_status = i18n.t("status_inactive")
+                else:
+                    prefix = "🟢 "
+                    tooltip_status = i18n.t("status_active")
+
+                item_name = QTableWidgetItem(f"{prefix}{name}")
                 item_name.setData(Qt.ItemDataRole.UserRole, uid)
+                item_name.setToolTip(f"{name} — {tooltip_status}\n(Clique com botão direito para alterar status)")
                 self.user_table.setItem(row, 0, item_name)
                 self.user_table.setItem(row, 1, QTableWidgetItem(role))
 
@@ -911,6 +932,49 @@ class SentinelWindow(QMainWindow):
 
         except Exception as exc:
             logger.exception("Failed to refresh user table: %s", exc)
+
+    def _on_sidebar_user_context_menu(self, pos) -> None:
+        """Context menu on registered users sidebar table to quickly change status or edit/delete."""
+        item = self.user_table.itemAt(pos)
+        if not item:
+            index = self.user_table.indexAt(pos)
+            row = index.row()
+        else:
+            row = item.row()
+        if row < 0:
+            return
+
+        name_item = self.user_table.item(row, 0)
+        if not name_item:
+            return
+        uid = name_item.data(Qt.ItemDataRole.UserRole)
+        raw_name = name_item.text().lstrip("🟢⏸️🚫 ")
+
+        menu = QMenu(self)
+        menu.addAction(f"🟢 {i18n.t('action_set_active')}", lambda: self._on_quick_status_change(uid, "active", raw_name))
+        menu.addAction(f"⏸️ {i18n.t('action_set_inactive')}", lambda: self._on_quick_status_change(uid, "inactive", raw_name))
+        menu.addAction(f"🚫 {i18n.t('action_set_blocked')}", lambda: self._on_quick_status_change(uid, "blocked", raw_name))
+        menu.addSeparator()
+        menu.addAction(f"✏️ {i18n.t('btn_edit')}", lambda: self._show_edit_user_direct(uid))
+        menu.addAction(f"🗑️ {i18n.t('confirm_unregister_title')}", lambda: self._delete_user(uid, raw_name))
+        menu.exec(self.user_table.viewport().mapToGlobal(pos))
+
+    def _on_quick_status_change(self, user_id: int, new_status: str, name: str) -> None:
+        """Quickly switch a user between active, inactive, and blocked directly from sidebar."""
+        try:
+            database.set_user_status(user_id, new_status)
+            if self._worker:
+                self._worker.reload_embeddings()
+            self._refresh_user_table()
+            status_label = i18n.t(f"status_{new_status}")
+            self.status_bar.showMessage(i18n.t("status_changed_msg", name=name, status=status_label), 4000)
+        except Exception as exc:
+            logger.exception("Failed to change user status from sidebar: %s", exc)
+
+    def _show_edit_user_direct(self, user_id: int) -> None:
+        dlg = UserEditDialog(user_id=user_id, parent=self, camera_worker=self._worker)
+        dlg.user_saved.connect(lambda uid: self._on_user_database_changed())
+        dlg.exec()
 
     def _delete_user(self, user_id: int, name: str) -> None:
         """Confirm and delete a registered user."""
@@ -1152,10 +1216,22 @@ class SentinelWindow(QMainWindow):
 
 # ==============================================================================
 def main() -> None:
+    # Ensure Windows taskbar groups and displays the custom Sentinel icon
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sentinel.facial.surveillance.app.1.0.8")
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setApplicationName("Sentinel")
     app.setOrganizationName("Sentinel")
+
+    icon_path = get_resource("sentinel.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     window = SentinelWindow()
     window.show()

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QProgressBar, QTextEdit, QWidget, QMessageBox
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 
 import i18n
 import database
+from app_paths import get_resource
 
 logger = logging.getLogger("Sentinel.Updater")
 
@@ -255,6 +257,10 @@ class UpdateDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinMaxButtonsHint | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumSize(460, 360)
         self.resize(520, 420)
+
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self._init_ui()
 

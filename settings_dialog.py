@@ -13,15 +13,18 @@ import logging
 from typing import Callable, Optional
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QComboBox, QPushButton, QGroupBox, QWidget,
     QTabWidget
 )
 
+import os
 import database
 import i18n
 import updater
+from app_paths import get_resource
 
 logger = logging.getLogger("Sentinel.Settings")
 
@@ -44,6 +47,10 @@ class SettingsDialog(QDialog):
         )
         self.setMinimumSize(480, 420)
         self.resize(560, 500)
+
+        icon_path = get_resource("sentinel.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self._init_ui()
         self._load_current_values()
